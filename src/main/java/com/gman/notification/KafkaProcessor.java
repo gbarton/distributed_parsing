@@ -5,10 +5,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import com.gman.util.Constants;
 
 import kafka.consumer.Consumer;
 import kafka.consumer.ConsumerConfig;
@@ -18,6 +21,11 @@ import kafka.javaapi.consumer.ConsumerConnector;
 import kafka.javaapi.producer.Producer;
 import kafka.producer.ProducerConfig;
 
+/**
+ * This connects to the kafka brokers with producers and consumers.
+ * TODO: do i want hardcoded streams or pass those in??
+ *
+ */
 public class KafkaProcessor extends BaseProcessor {
 	private static final Log LOG = LogFactory.getLog(KafkaProcessor.class);
 	//I still dont know why consumer wants zk and producer wants brokers
@@ -75,24 +83,30 @@ public class KafkaProcessor extends BaseProcessor {
 		return null;
 	}
 
+	private List<KafkaStream<byte[], byte[]>> getStreams(String topic, int threads) {
+		Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
+		topicCountMap.put(topic, threads);
+		return consumer.createMessageStreams(topicCountMap).get(topic);		
+	}
+	
 	@Override
 	public void run() {
-//		ExecutorService executor;
-//	    Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
-//	    topicCountMap.put(topic, new Integer(a_numThreads));
-//	    Map<String, List<KafkaStream<byte[], byte[]>>> consumerMap = consumer.createMessageStreams(topicCountMap);
-//	    List<KafkaStream<byte[], byte[]>> streams = consumerMap.get(topic);
-//	 
-//	 
-//	    // now launch all the threads
-//	    executor = Executors.newFixedThreadPool(a_numThreads);
-//	 
-//	    // now create an object to consume the messages
-//	    int threadNumber = 0;
-//	    for (final KafkaStream stream : streams) {
-//	        executor.submit(new ConsumerThread(stream, threadNumber));
-//	        threadNumber++;
-//	    }
+		ExecutorService executor;
+		//map of topics and number of threads to put to work on each, for now 1 per.
+	    Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
+	    topicCountMap.put(Constants.TOPIC_CONTROL, new Integer(1));
+	    topicCountMap.put(Constants.TOPIC_WORKUNIT, new Integer(1));
+	    //TODO: hardcoded threadpool size bad
+	    executor = Executors.newFixedThreadPool(2);
+	    
+	    Map<String, List<KafkaStream<byte[], byte[]>>> consumerThreadMap = consumer.createMessageStreams(topicCountMap);
+	    
+	    int threadNum = 0;
+    	//for each stream in topic
+    	for(final KafkaStream<byte[],byte[]> stream : getStreams(Constants.TOPIC_WORKUNIT,1)) {
+    		executor.submit(new ConsumerThread(stream, threadNum, new WorkUnit(), workUnits));
+    		threadNum++;
+    	}
 	}
 	
 	/**
@@ -101,12 +115,12 @@ public class KafkaProcessor extends BaseProcessor {
 	 * @param <T>
 	 */
 	public class ConsumerThread<T extends KMesg<T>> implements Runnable {
-	    private KafkaStream<String, String> stream;
+	    private KafkaStream<byte[], byte[]> stream;
 	    private int threadNum;
 	    private T kMesg;
 	    private ArrayBlockingQueue<T> queue;
 	 
-	    public ConsumerThread(KafkaStream stream, int threadNum, T obj,
+	    public ConsumerThread(KafkaStream<byte[], byte[]> stream, int threadNum, T obj,
 	    		ArrayBlockingQueue<T> queue) {
 	    	this.threadNum = threadNum;
 	    	this.stream = stream;
@@ -115,9 +129,9 @@ public class KafkaProcessor extends BaseProcessor {
 	    }
 	 
 	    public void run() {
-	        ConsumerIterator<String, String> it = stream.iterator();
+	        ConsumerIterator<byte[], byte[]> it = stream.iterator();
 	        while (it.hasNext()) {
-	        	String message = it.next().message();
+	        	String message = new String(it.next().message());
 	            LOG.info("Thread " + threadNum + ": " + message);
 	            try {
 					T obj = (T) kMesg.getClass().newInstance();

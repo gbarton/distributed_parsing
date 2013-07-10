@@ -14,8 +14,9 @@ public class Constants {
 	
 	//discover service constants
 	public static final String BROKER_ZK_URI = "broker_uri";
-	public static final String DIS_TOPIC = "disc_topic";
-	public static final String DIS_SERVICE = "disc_service";
+	public static final String TOPIC_DISCOVERY = "disc_topic";
+	public static final String TOPIC_CONTROL = "disc_service";
+	public static final String TOPIC_WORKUNIT = "disc_service";
 	
 	
 	/**

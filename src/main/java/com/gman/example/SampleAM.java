@@ -313,7 +313,7 @@ public class SampleAM implements Watcher {
 		
 		Producer<String, String> producer = new Producer<String, String>(config);
 		LOG.info("producer created");
-		KeyedMessage<String, String> data = new KeyedMessage<String, String>(Constants.DIS_TOPIC, Constants.DIS_SERVICE, "value1");
+		KeyedMessage<String, String> data = new KeyedMessage<String, String>(Constants.TOPIC_DISCOVERY, "key1", "value1");
 
 		producer.send(data);
 		LOG.info("wrote message: " + data);
