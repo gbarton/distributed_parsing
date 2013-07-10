@@ -155,7 +155,7 @@
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
-			<groupId>org.apache</groupId>
+			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka</artifactId>
 			<version>0.8</version>
 		</dependency>
