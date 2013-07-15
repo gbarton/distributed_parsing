@@ -7,10 +7,12 @@ import java.util.Properties;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.gman.notification.EventProcessor.WorkUnit;
 import com.gman.util.Constants;
 
 import kafka.consumer.Consumer;
@@ -19,6 +21,7 @@ import kafka.consumer.ConsumerIterator;
 import kafka.consumer.KafkaStream;
 import kafka.javaapi.consumer.ConsumerConnector;
 import kafka.javaapi.producer.Producer;
+import kafka.producer.KeyedMessage;
 import kafka.producer.ProducerConfig;
 
 /**
@@ -31,14 +34,29 @@ public class KafkaProcessor extends BaseProcessor {
 	//I still dont know why consumer wants zk and producer wants brokers
 	private String brokerURI;
 	private String BrokerZKURI;
+	//TODO: how long to chill when waiting for a message, probably should be configurable
+	private int waitInSeconds = 5;
+	private int numTopics = 1;
+	private boolean isClient = true;
 	private final ConsumerConnector consumer;
 	private final Producer<String, String> producer;
 	private ArrayBlockingQueue<WorkUnit> workUnits = new ArrayBlockingQueue<EventProcessor.WorkUnit>(10);
 	private ArrayBlockingQueue<Control> controlCommands = new ArrayBlockingQueue<EventProcessor.Control>(10);
 
 	public KafkaProcessor(String broker, String zkuri) {
+		this(broker, zkuri,false);
+	}
+	
+	/**
+	 * @param broker
+	 * @param zkuri
+	 * @param isClient -override for master/server mode
+	 */
+	public KafkaProcessor(String broker, String zkuri, boolean isClient) {
 		this.brokerURI = broker;
 		this.BrokerZKURI = zkuri;
+		this.isClient = isClient;
+		LOG.info("Starting init with broker: " + broker + " and zk: " + zkuri);
 		
 		//consumer setup
 		Properties cprops = new Properties();
@@ -63,14 +81,33 @@ public class KafkaProcessor extends BaseProcessor {
 		LOG.info("producer created");
 	}
 	
+	
+//	/**
+//	 * This class has 2 modes, the client side which is considered the DOWN side
+//	 * of topics, and the server side which is the UP side. This will startup
+//	 * the correct streams for listening and writing to.
+//	 * @param client
+//	 */
+//	public void setClient(boolean isClient) {
+//		this.isClient = isClient;
+//	}
+	
 	@Override
 	public void sendControlEvent(WorkUnit work, Control c) {
-		System.out.println("controlEvent: " + c + " unit: " + work);
+		LOG.info("controlEvent: " + c + " unit: " + work);
+		KeyedMessage<String, String> mess = new KeyedMessage<String, String>(
+				Constants.TOPIC_CONTROL_UP,c.toString(),work.pack());
+		producer.send(mess);
 	}
 	
 	@Override
 	public Control getControlEvent() {
-		return null;
+		try {
+			return controlCommands.poll(waitInSeconds, TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			LOG.error("I cant read the streams!",e);
+			return null;
+		}
 	}
 	
 	@Override
@@ -89,24 +126,58 @@ public class KafkaProcessor extends BaseProcessor {
 		return consumer.createMessageStreams(topicCountMap).get(topic);		
 	}
 	
+	/**
+	 * Helper to make the dumb map for asking for topic streams
+	 * defaults to a single thread per stream
+	 * @param topics
+	 * @return
+	 */
+	private Map<String, Integer> topicMap(String... topics) {
+		Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
+		Integer i = new Integer(1);
+		for(String t : topics)
+			topicCountMap.put(t, i);
+		return topicCountMap;
+	}
+	
+	
+	
 	@Override
 	public void run() {
-		ExecutorService executor;
-		//map of topics and number of threads to put to work on each, for now 1 per.
-	    Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
-	    topicCountMap.put(Constants.TOPIC_CONTROL, new Integer(1));
-	    topicCountMap.put(Constants.TOPIC_WORKUNIT, new Integer(1));
-	    //TODO: hardcoded threadpool size bad
-	    executor = Executors.newFixedThreadPool(2);
+		//setting up consumers
+		ExecutorService executor = null;
+		
+		//2 topics to LISTEN to
+		if(isClient) {
+			numTopics = 2;
+			executor = Executors.newFixedThreadPool(numTopics);
+
+		    int threadNum = 0;
+	    	//for each stream in topic
+	    	for(final KafkaStream<byte[],byte[]> stream : getStreams(Constants.TOPIC_WORKUNIT_DOWN,1)) {
+	    		executor.submit(new ConsumerThread<WorkUnit>(stream, threadNum, WorkUnit.class, workUnits));
+	    		threadNum++;
+	    	}
+	    	//for each stream in topic
+	    	for(final KafkaStream<byte[],byte[]> stream : getStreams(Constants.TOPIC_CONTROL_DOWN,1)) {
+	    		executor.submit(new ConsumerThread<Control>(stream, threadNum, Control.class, controlCommands));
+	    		threadNum++;
+	    	}
+
+		
+		} else {
+			numTopics = 2;
+			executor = Executors.newFixedThreadPool(numTopics);
+			int threadNum = 0;
+	    	//for each stream in topic
+	    	for(final KafkaStream<byte[],byte[]> stream : getStreams(Constants.TOPIC_CONTROL_UP,1)) {
+	    		executor.submit(new ConsumerThread<Control>(stream, threadNum, Control.class, controlCommands));
+	    		threadNum++;
+	    	}
+		}
+		
+		
 	    
-	    Map<String, List<KafkaStream<byte[], byte[]>>> consumerThreadMap = consumer.createMessageStreams(topicCountMap);
-	    
-	    int threadNum = 0;
-    	//for each stream in topic
-    	for(final KafkaStream<byte[],byte[]> stream : getStreams(Constants.TOPIC_WORKUNIT,1)) {
-    		executor.submit(new ConsumerThread(stream, threadNum, new WorkUnit(), workUnits));
-    		threadNum++;
-    	}
 	}
 	
 	/**
@@ -117,10 +188,10 @@ public class KafkaProcessor extends BaseProcessor {
 	public class ConsumerThread<T extends KMesg<T>> implements Runnable {
 	    private KafkaStream<byte[], byte[]> stream;
 	    private int threadNum;
-	    private T kMesg;
+	    private Class<T> kMesg;
 	    private ArrayBlockingQueue<T> queue;
 	 
-	    public ConsumerThread(KafkaStream<byte[], byte[]> stream, int threadNum, T obj,
+	    public ConsumerThread(KafkaStream<byte[], byte[]> stream, int threadNum, Class<T> obj,
 	    		ArrayBlockingQueue<T> queue) {
 	    	this.threadNum = threadNum;
 	    	this.stream = stream;
@@ -134,7 +205,7 @@ public class KafkaProcessor extends BaseProcessor {
 	        	String message = new String(it.next().message());
 	            LOG.info("Thread " + threadNum + ": " + message);
 	            try {
-					T obj = (T) kMesg.getClass().newInstance();
+					T obj = (T) kMesg.newInstance();
 					obj.unpack(message);
 					queue.add(obj);
 				} catch (InstantiationException e) {

@@ -13,6 +13,8 @@ public class SimplePartitioner implements Partitioner<String> {
     
     //TODO: null check??
     public int partition(String key, int numPartitions) {
+    	if (numPartitions == 1)
+    		return 1 % 1;
     	return (key.hashCode()) % numPartitions;
   }
 

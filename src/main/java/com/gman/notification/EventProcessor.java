@@ -95,12 +95,22 @@ public interface EventProcessor {
 		}
 	}
 	
-	public static enum Control {
+	public static enum Control implements KMesg<Control> {
 		START,
 		STOP,
 		RETRY,
 		PAUSE,
 		FAILED,
-		FINISHED
+		FINISHED;
+
+		@Override
+		public String pack() {
+			return this.toString();
+		}
+
+		@Override
+		public Control unpack(String packed) {
+			return Control.valueOf(packed);
+		}
 	}
 }
