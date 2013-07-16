@@ -28,7 +28,7 @@ public class KafkaProcessorTest {
 		tb.start();
 		
 		server = new KafkaProcessor(broker.getURI(), broker.getZKURI(), false);
-		client = new KafkaProcessor(broker.getURI(), zk.getURI());
+		client = new KafkaProcessor(broker.getURI(), broker.getZKURI());
 		
 	}
 

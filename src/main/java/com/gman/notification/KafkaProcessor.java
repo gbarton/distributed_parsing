@@ -27,7 +27,8 @@ import kafka.producer.ProducerConfig;
 /**
  * This connects to the kafka brokers with producers and consumers.
  * TODO: do i want hardcoded streams or pass those in??
- *
+ * This class has 2 modes, the client side which is considered the DOWN side
+ * of topics, and the server side which is the UP side.
  */
 public class KafkaProcessor extends BaseProcessor {
 	private static final Log LOG = LogFactory.getLog(KafkaProcessor.class);
@@ -44,7 +45,7 @@ public class KafkaProcessor extends BaseProcessor {
 	private ArrayBlockingQueue<Control> controlCommands = new ArrayBlockingQueue<EventProcessor.Control>(10);
 
 	public KafkaProcessor(String broker, String zkuri) {
-		this(broker, zkuri,false);
+		this(broker, zkuri,true);
 	}
 	
 	/**
@@ -56,13 +57,13 @@ public class KafkaProcessor extends BaseProcessor {
 		this.brokerURI = broker;
 		this.BrokerZKURI = zkuri;
 		this.isClient = isClient;
-		LOG.info("Starting init with broker: " + broker + " and zk: " + zkuri);
+		LOG.info("Starting (" + (isClient?"client":"server") + ") init with broker: " + broker + " and zk: " + zkuri);
 		
 		//consumer setup
 		Properties cprops = new Properties();
 		cprops.put("zookeeper.connect", BrokerZKURI);
         //TODO: do i need different group names? probably need to be unique
-		cprops.put("group.id", "group1");
+		cprops.put("group.id", "group-" + System.currentTimeMillis());
 		cprops.put("zookeeper.session.timeout.ms", "4000");
 		cprops.put("zookeeper.sync.time.ms", "200");
 		cprops.put("auto.commit.interval.ms", "1000");
@@ -79,6 +80,10 @@ public class KafkaProcessor extends BaseProcessor {
 		ProducerConfig config = new ProducerConfig(pprops);
 		producer = new Producer<String, String>(config);
 		LOG.info("producer created");
+		
+		run();
+//		Thread t = new Thread(this);
+//		t.start();
 	}
 	
 	
@@ -94,15 +99,22 @@ public class KafkaProcessor extends BaseProcessor {
 	
 	@Override
 	public void sendControlEvent(WorkUnit work, Control c) {
-		LOG.info("controlEvent: " + c + " unit: " + work);
+		LOG.info("@@@@@@@@@@@@");
+		LOG.info("topic: " + (isClient?Constants.TOPIC_CONTROL_UP:Constants.TOPIC_CONTROL_DOWN) + " controlEvent: " + c + " unit: " + work);
+		LOG.info("@@@@@@@@@@@@");
 		KeyedMessage<String, String> mess = new KeyedMessage<String, String>(
-				Constants.TOPIC_CONTROL_UP,c.toString(),work.pack());
+				isClient?Constants.TOPIC_CONTROL_UP:Constants.TOPIC_CONTROL_DOWN,
+				c.pack(),work.pack());
+		LOG.info("@@@@@@@@@@@@");
 		producer.send(mess);
+		LOG.info("@@@@@@@@@@@@");
+		
 	}
 	
 	@Override
 	public Control getControlEvent() {
 		try {
+			LOG.info("getControlEvent!!");
 			return controlCommands.poll(waitInSeconds, TimeUnit.SECONDS);
 		} catch (InterruptedException e) {
 			LOG.error("I cant read the streams!",e);
@@ -123,7 +135,7 @@ public class KafkaProcessor extends BaseProcessor {
 	private List<KafkaStream<byte[], byte[]>> getStreams(String topic, int threads) {
 		Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
 		topicCountMap.put(topic, threads);
-		return consumer.createMessageStreams(topicCountMap).get(topic);		
+		return consumer.createMessageStreams(topicCountMap).get(topic);
 	}
 	
 	/**
@@ -144,6 +156,7 @@ public class KafkaProcessor extends BaseProcessor {
 	
 	@Override
 	public void run() {
+		
 		//setting up consumers
 		ExecutorService executor = null;
 		
@@ -155,12 +168,12 @@ public class KafkaProcessor extends BaseProcessor {
 		    int threadNum = 0;
 	    	//for each stream in topic
 	    	for(final KafkaStream<byte[],byte[]> stream : getStreams(Constants.TOPIC_WORKUNIT_DOWN,1)) {
-	    		executor.submit(new ConsumerThread<WorkUnit>(stream, threadNum, WorkUnit.class, workUnits));
+	    		executor.submit(new ConsumerThread<WorkUnit>(stream, threadNum, WorkUnit.class, workUnits,Constants.TOPIC_WORKUNIT_DOWN));
 	    		threadNum++;
 	    	}
 	    	//for each stream in topic
 	    	for(final KafkaStream<byte[],byte[]> stream : getStreams(Constants.TOPIC_CONTROL_DOWN,1)) {
-	    		executor.submit(new ConsumerThread<Control>(stream, threadNum, Control.class, controlCommands));
+	    		executor.submit(new ConsumerThread<Control>(stream, threadNum, Control.class, controlCommands,Constants.TOPIC_CONTROL_DOWN));
 	    		threadNum++;
 	    	}
 
@@ -171,13 +184,10 @@ public class KafkaProcessor extends BaseProcessor {
 			int threadNum = 0;
 	    	//for each stream in topic
 	    	for(final KafkaStream<byte[],byte[]> stream : getStreams(Constants.TOPIC_CONTROL_UP,1)) {
-	    		executor.submit(new ConsumerThread<Control>(stream, threadNum, Control.class, controlCommands));
+	    		executor.submit(new ConsumerThread<Control>(stream, threadNum, Control.class, controlCommands,Constants.TOPIC_CONTROL_UP));
 	    		threadNum++;
 	    	}
 		}
-		
-		
-	    
 	}
 	
 	/**
@@ -190,20 +200,27 @@ public class KafkaProcessor extends BaseProcessor {
 	    private int threadNum;
 	    private Class<T> kMesg;
 	    private ArrayBlockingQueue<T> queue;
+	    private String topic;
 	 
 	    public ConsumerThread(KafkaStream<byte[], byte[]> stream, int threadNum, Class<T> obj,
-	    		ArrayBlockingQueue<T> queue) {
+	    		ArrayBlockingQueue<T> queue, String topic) {
 	    	this.threadNum = threadNum;
 	    	this.stream = stream;
 	    	this.kMesg = obj;
 	    	this.queue = queue;
+	    	this.topic = topic;
 	    }
 	 
 	    public void run() {
 	        ConsumerIterator<byte[], byte[]> it = stream.iterator();
+	        LOG.info("*************");
+	        LOG.info(stream.clientId() + " Consumer started with Class Type: " + kMesg.getName() + " on topic: " + topic);
+	        LOG.info("*************");
 	        while (it.hasNext()) {
 	        	String message = new String(it.next().message());
+		        LOG.info("*************");
 	            LOG.info("Thread " + threadNum + ": " + message);
+		        LOG.info("*************");
 	            try {
 					T obj = (T) kMesg.newInstance();
 					obj.unpack(message);
