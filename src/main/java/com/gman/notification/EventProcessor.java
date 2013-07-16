@@ -44,9 +44,55 @@ public interface EventProcessor {
 	}
 	
 	public static class WorkUnit implements KMesg<WorkUnit> {
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + ((pathIn == null) ? 0 : pathIn.hashCode());
+			result = prime * result + ((pathOut == null) ? 0 : pathOut.hashCode());
+			result = prime * result + ((work == null) ? 0 : work.hashCode());
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			WorkUnit other = (WorkUnit) obj;
+			if (pathIn == null) {
+				if (other.pathIn != null)
+					return false;
+			} else if (!pathIn.equals(other.pathIn))
+				return false;
+			if (pathOut == null) {
+				if (other.pathOut != null)
+					return false;
+			} else if (!pathOut.equals(other.pathOut))
+				return false;
+			if (work == null) {
+				if (other.work != null)
+					return false;
+			} else if (!work.equals(other.work))
+				return false;
+			return true;
+		}
+
 		public String work;
 		public String pathIn = null;
 		public String pathOut = null;
+		
+		public WorkUnit() {
+			
+		}
+		
+		public WorkUnit(String pathIn, String pathOut) {
+			this.pathIn = pathIn;
+			this.pathOut = pathOut;
+		}
 		
 		public String toString() {
 			return "pathIn: " + pathIn + " pathOut: " + pathOut;

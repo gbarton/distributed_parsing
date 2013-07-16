@@ -79,7 +79,7 @@ public class EmbeddedZK implements Runnable {
 		ZooKeeperServer server;
 		try {
 			server = new ZooKeeperServer(logDir, logDir, tickTime);
-			ServerCnxnFactory standaloneServerFactory;
+//			ServerCnxnFactory standaloneServerFactory;
 			standaloneServerFactory = ServerCnxnFactory.createFactory(0, numConnections);
 			standaloneServerFactory.startup(server);
 			int p = standaloneServerFactory.getLocalPort();

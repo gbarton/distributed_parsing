@@ -1,5 +1,6 @@
 package com.gman.notification;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -7,10 +8,17 @@ import java.util.Properties;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import org.I0Itec.zkclient.exception.ZkNodeExistsException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.codehaus.jackson.JsonGenerationException;
+import org.codehaus.jackson.JsonParseException;
+import org.codehaus.jackson.map.JsonMappingException;
+import org.codehaus.jackson.map.ObjectMapper;
 
 import com.gman.notification.EventProcessor.WorkUnit;
 import com.gman.util.Constants;
@@ -39,11 +47,13 @@ public class KafkaProcessor extends BaseProcessor {
 	private int waitInSeconds = 5;
 	private int numTopics = 1;
 	private boolean isClient = true;
-	private final ConsumerConnector consumer;
+//	private final ConsumerConnector consumer;
 	private final Producer<String, String> producer;
 	private ArrayBlockingQueue<WorkUnit> workUnits = new ArrayBlockingQueue<EventProcessor.WorkUnit>(10);
 	private ArrayBlockingQueue<Control> controlCommands = new ArrayBlockingQueue<EventProcessor.Control>(10);
-
+	//setting up consumers
+	private ExecutorService executor = null;
+	
 	public KafkaProcessor(String broker, String zkuri) {
 		this(broker, zkuri,true);
 	}
@@ -59,17 +69,17 @@ public class KafkaProcessor extends BaseProcessor {
 		this.isClient = isClient;
 		LOG.info("Starting (" + (isClient?"client":"server") + ") init with broker: " + broker + " and zk: " + zkuri);
 		
-		//consumer setup
-		Properties cprops = new Properties();
-		cprops.put("zookeeper.connect", BrokerZKURI);
-        //TODO: do i need different group names? probably need to be unique
-		cprops.put("group.id", "group-" + System.currentTimeMillis());
-		cprops.put("zookeeper.session.timeout.ms", "4000");
-		cprops.put("zookeeper.sync.time.ms", "200");
-		cprops.put("auto.commit.interval.ms", "1000");
-        ConsumerConfig kconf = new ConsumerConfig(cprops);
-		consumer = Consumer.createJavaConsumerConnector(kconf);
-		LOG.info("consumer connector created");
+//		//consumer setup
+//		Properties cprops = new Properties();
+//		cprops.put("zookeeper.connect", BrokerZKURI);
+//        //TODO: do i need different group names? probably need to be unique
+//		cprops.put("group.id", "group-" + System.currentTimeMillis());
+//		cprops.put("zookeeper.session.timeout.ms", "4000");
+//		cprops.put("zookeeper.sync.time.ms", "200");
+//		cprops.put("auto.commit.interval.ms", "1000");
+//        ConsumerConfig kconf = new ConsumerConfig(cprops);
+//		consumer = Consumer.createJavaConsumerConnector(kconf);
+//		LOG.info("consumer connector created");
 		
 		//producer setup
 		Properties pprops = new Properties();
@@ -77,15 +87,21 @@ public class KafkaProcessor extends BaseProcessor {
 		pprops.put("serializer.class", "kafka.serializer.StringEncoder");
 		pprops.put("partitioner.class", "com.gman.broker.SimplePartitioner");
 		pprops.put("request.required.acks", "1");
+		pprops.put("producer.type", "sync");
 		ProducerConfig config = new ProducerConfig(pprops);
 		producer = new Producer<String, String>(config);
-		LOG.info("producer created");
+		LOG.info("producer connector created");
 		
 		run();
 //		Thread t = new Thread(this);
 //		t.start();
 	}
+
 	
+	public void shutdown() {
+		if(executor != null)
+			executor.shutdownNow();
+	}
 	
 //	/**
 //	 * This class has 2 modes, the client side which is considered the DOWN side
@@ -99,22 +115,35 @@ public class KafkaProcessor extends BaseProcessor {
 	
 	@Override
 	public void sendControlEvent(WorkUnit work, Control c) {
+		ObjectMapper mapper = new ObjectMapper();
 		LOG.info("@@@@@@@@@@@@");
 		LOG.info("topic: " + (isClient?Constants.TOPIC_CONTROL_UP:Constants.TOPIC_CONTROL_DOWN) + " controlEvent: " + c + " unit: " + work);
 		LOG.info("@@@@@@@@@@@@");
-		KeyedMessage<String, String> mess = new KeyedMessage<String, String>(
-				isClient?Constants.TOPIC_CONTROL_UP:Constants.TOPIC_CONTROL_DOWN,
-				c.pack(),work.pack());
-		LOG.info("@@@@@@@@@@@@");
-		producer.send(mess);
-		LOG.info("@@@@@@@@@@@@");
-		
+		KeyedMessage<String, String> mess;
+		try {
+			mess = new KeyedMessage<String, String>(
+					isClient?Constants.TOPIC_CONTROL_UP:Constants.TOPIC_CONTROL_DOWN,
+							mapper.writeValueAsString(c), mapper.writeValueAsString(work));
+//			c.pack(),work.pack());
+	LOG.info("@@@@@@@@@@@@");
+	producer.send(mess);
+	LOG.info("@@@@@@@@@@@@");
+		} catch (JsonGenerationException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (JsonMappingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 	
 	@Override
 	public Control getControlEvent() {
 		try {
-			LOG.info("getControlEvent!!");
+			LOG.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!! getControlEvent");
 			return controlCommands.poll(waitInSeconds, TimeUnit.SECONDS);
 		} catch (InterruptedException e) {
 			LOG.error("I cant read the streams!",e);
@@ -133,6 +162,17 @@ public class KafkaProcessor extends BaseProcessor {
 	}
 
 	private List<KafkaStream<byte[], byte[]>> getStreams(String topic, int threads) {
+		//consumer setup
+		Properties cprops = new Properties();
+		cprops.put("zookeeper.connect", BrokerZKURI);
+        //TODO: do i need different group names? probably need to be unique
+		cprops.put("group.id", "group-" + System.currentTimeMillis());
+		cprops.put("zookeeper.session.timeout.ms", "4000");
+		cprops.put("zookeeper.sync.time.ms", "200");
+		cprops.put("auto.commit.interval.ms", "1000");
+        ConsumerConfig kconf = new ConsumerConfig(cprops);
+        ConsumerConnector consumer = Consumer.createJavaConsumerConnector(kconf);
+		LOG.info("consumer connector created");
 		Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
 		topicCountMap.put(topic, threads);
 		return consumer.createMessageStreams(topicCountMap).get(topic);
@@ -156,12 +196,10 @@ public class KafkaProcessor extends BaseProcessor {
 	
 	@Override
 	public void run() {
-		
-		//setting up consumers
-		ExecutorService executor = null;
-		
+		try {
 		//2 topics to LISTEN to
 		if(isClient) {
+			LOG.info("(" + (isClient?"client":"server") + ") 1");
 			numTopics = 2;
 			executor = Executors.newFixedThreadPool(numTopics);
 
@@ -177,8 +215,9 @@ public class KafkaProcessor extends BaseProcessor {
 	    		threadNum++;
 	    	}
 
-		
+	    	LOG.info("(" + (isClient?"client":"server") + ") 2");
 		} else {
+			LOG.info("(" + (isClient?"client":"server") + ") 1");
 			numTopics = 2;
 			executor = Executors.newFixedThreadPool(numTopics);
 			int threadNum = 0;
@@ -187,7 +226,14 @@ public class KafkaProcessor extends BaseProcessor {
 	    		executor.submit(new ConsumerThread<Control>(stream, threadNum, Control.class, controlCommands,Constants.TOPIC_CONTROL_UP));
 	    		threadNum++;
 	    	}
+	    	LOG.info("(" + (isClient?"client":"server") + ") 2");
 		}
+		}catch(ZkNodeExistsException e) { 
+			LOG.error("(" + (isClient?"client":"server") + ") error", e);
+			throw e;
+		}
+		LOG.info("Completed (" + (isClient?"client":"server") + ") init with broker: " + brokerURI + " and zk: " + BrokerZKURI);
+
 	}
 	
 	/**
@@ -218,17 +264,28 @@ public class KafkaProcessor extends BaseProcessor {
 	        LOG.info("*************");
 	        while (it.hasNext()) {
 	        	String message = new String(it.next().message());
-		        LOG.info("*************");
+		        LOG.info("###################");
 	            LOG.info("Thread " + threadNum + ": " + message);
-		        LOG.info("*************");
+		        LOG.info("###################");
 	            try {
-					T obj = (T) kMesg.newInstance();
-					obj.unpack(message);
+	            	ObjectMapper mapper = new ObjectMapper();
+	            	T obj = mapper.readValue(message, kMesg);
+//					T obj = (T) kMesg.newInstance();
+//					obj.unpack(message);
 					queue.add(obj);
-				} catch (InstantiationException e) {
+//				} catch (InstantiationException e) {
+//					// TODO Auto-generated catch block
+//					e.printStackTrace();
+//				} catch (IllegalAccessException e) {
+//					// TODO Auto-generated catch block
+//					e.printStackTrace();
+				} catch (JsonParseException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
-				} catch (IllegalAccessException e) {
+				} catch (JsonMappingException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (IOException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}

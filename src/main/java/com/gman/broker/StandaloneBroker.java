@@ -63,6 +63,7 @@ public class StandaloneBroker implements Runnable, Watcher {
 			} catch (InterruptedException e) {
 				//gulp
 			}
+			LOG.info("closed handle to ZK");
 		}
     	init.add(basePath);
 	}
@@ -116,7 +117,7 @@ public class StandaloneBroker implements Runnable, Watcher {
 			server = new KafkaServerStartable(kconf);
 			server.startup();
 			port.add(tmpPort);
-			LOG.info("Broker online");
+			LOG.info("Broker online on port: " + tmpPort);
 		}
 		
 	}
