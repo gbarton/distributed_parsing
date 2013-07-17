@@ -19,13 +19,16 @@ public class YarnUtils {
 	
 	/**
 	 * takes in the min/max resource of the system and the desired amount of memory and 
-	 * returns a request for it.
+	 * returns a request for it. Ram is bumped up to the next whole unit that the cluster operates at.
+	 * So if the cluster has min = 100MB, and you request 150MB, you will get 200MB.
 	 * @param min -cluster Min resource
 	 * @param max -cluster max resource
+	 * @param desiredMemory -amount of ram wanted
 	 * @param numContainers -how many containers like this to request
 	 * @return
 	 */
 	public static ResourceRequest getResRequest(Resource min, Resource max, int desiredMemory, int numContainers) {
+		LOG.info("resource request " + min + " " + max + " " + desiredMemory + " num: " + numContainers);
 		ResourceRequest rsrcRequest = Records.newRecord(ResourceRequest.class);
 		rsrcRequest.setHostName("*");
 		Priority pri = Records.newRecord(Priority.class);
@@ -36,11 +39,11 @@ public class YarnUtils {
 		if(desiredMemory > max.getMemory())
 			ram = max.getMemory();
 		else
-			ram = (desiredMemory/min.getMemory())*min.getMemory(); //i think this will give close enough
+			ram = new Long(Math.round(Math.ceil(desiredMemory/min.getMemory())*min.getMemory())).intValue(); //i think this will give close enough
 			
 		rsrcRequest.setCapability(YarnUtils.getResource(ram));
 		rsrcRequest.setNumContainers(1);
-//		LOG.info("resource requested with ram: " + rsrcRequest.getCapability().getMemory());
+		LOG.info("resource requested setup with ram: " + rsrcRequest.getCapability().getMemory());
 		return rsrcRequest;
 	}
 	

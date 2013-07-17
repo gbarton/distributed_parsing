@@ -4,21 +4,24 @@ import java.io.IOException;
 
 public class DPClient extends YarnClient {
 
-	public DPClient() throws IOException {
-		super(null);
-		//TODO: 
-		//pass up to super to init Yarn connections.
-		//find jar
-		//get class name to launch
-		//setup resources
-		//launch.
+	public DPClient(String zkURI) throws IOException {
+		super(zkURI);
+		this.amClassName = "";
+		this.pathToHDFSJar = "/dp.jar";
 	}
 	
 	/**
 	 * @param args
+	 * @throws IOException 
+	 * @throws InterruptedException 
 	 */
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException, InterruptedException {
+		if(args.length != 1) {
+			System.out.println("USAGE: DPClient <zkUri>");
+		}
 		
+		DPClient client = new DPClient(args[0]);
+		client.start();
 
 	}
 
