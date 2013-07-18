@@ -117,6 +117,8 @@ public class YarnClient {
 		int idx = pathToHDFSJar.lastIndexOf("/");
 		if (idx == -1)
 			idx = 0;
+		else
+			idx = idx + 1;
 		String jarName = pathToHDFSJar.substring(idx);
 		LOG.info("Extracted Jar name: " + jarName);
 		
@@ -142,9 +144,10 @@ public class YarnClient {
 
 				if (line == null)
 					LOG.info("unknown command");
-				else if (line.equals("q"))
+				else if (line.equals("q")) {
+					close();
 					break;
-				else if (line.equals("r")) {
+				} else if (line.equals("r")) {
 					report = reportResponse.getApplicationReport();
 					LOG.info("appId: " + appId + " state: " + report.getYarnApplicationState().toString());
 					LOG.info("on host: " + report.getHost() + ":" + report.getRpcPort());
@@ -227,6 +230,7 @@ public class YarnClient {
 				+ ApplicationConstants.LOG_DIR_EXPANSION_VAR + "/err";
 
 		List<String> commands = new ArrayList<String>();
+		LOG.info("App launch Command: " + command);
 		commands.add(command);
 		amContainer.setCommands(commands);
 

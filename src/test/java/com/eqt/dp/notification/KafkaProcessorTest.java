@@ -50,7 +50,7 @@ public class KafkaProcessorTest {
 			broker.shutDown();
 	}
 
-	@Test
+//	@Test
 	public void test() {
 
 		server.sendControlEvent(u, c);

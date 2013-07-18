@@ -49,6 +49,7 @@ import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.ZooDefs.Ids;
 
+import com.gman.broker.StandaloneBroker;
 import com.gman.util.Constants;
 import com.gman.util.YarnUtils;
 
@@ -60,6 +61,7 @@ public class YarnAppManager implements Watcher {
 	//redundant and all that stuffs.
 	//TODO: make that work :)
 	protected boolean embeddedBroker = true;
+	private StandaloneBroker broker = null;
 
 	private ZooKeeper zk;
 	private ContainerId containerId;
@@ -69,7 +71,7 @@ public class YarnAppManager implements Watcher {
 	// YARN RPC to communicate with the Resource Manager or Node Manager
 	private YarnRPC rpc;
 	private AMRMProtocol resourceManager;
-	Map<String, String> envs;
+	Map<String, String> envs = new HashMap<String, String>();
 	
 	//info about where we are running
 	private String host;
@@ -83,10 +85,10 @@ public class YarnAppManager implements Watcher {
 		LOG.info("*******************");
 		LOG.info("YarnAppManager comming up");
 		LOG.info("*******************");
-		envs = System.getenv();
+		envs.putAll(System.getenv());
 
 		conf = new YarnConfiguration();
-		conf.set("fs.defaultFS", envs.get(Constants.ENV_HDFS_URI));
+//		conf.set("fs.defaultFS", envs.get(Constants.ENV_HDFS_URI));
 		rpc = YarnRPC.create(conf);
 		String containerIdString = envs.get(ApplicationConstants.AM_CONTAINER_ID_ENV);
 		if (containerIdString == null) {
@@ -124,6 +126,15 @@ public class YarnAppManager implements Watcher {
 		appMasterRequest.setApplicationAttemptId(appAttemptID);
 		appMasterRequest.setHost(host);
 
+		if(embeddedBroker) {
+			LOG.info("setting up enbedded broker.");
+			broker = new StandaloneBroker(envs.get(Constants.BROKER_ZK_URI));
+			Thread tb = new Thread(broker,"broker");
+			tb.start();
+			envs.put(Constants.BROKER_URI, broker.getURI());
+			LOG.info("broker online at port: " + broker.getPort());
+		}
+		
 		LOG.info("registring");
 		RegisterApplicationMasterResponse response = resourceManager.registerApplicationMaster(appMasterRequest);
 		min = response.getMinimumResourceCapability();
@@ -134,6 +145,7 @@ public class YarnAppManager implements Watcher {
 
 	@Override
 	public void process(WatchedEvent event) {
+		//TODO: when we go to multiple brokers this has to create more than 1 dir
     	String path = "/" + envs.get(Constants.ENV_NAME);
     	LOG.info("zookeeper connection complete, creating path: " + path);
     	try {
@@ -157,6 +169,21 @@ public class YarnAppManager implements Watcher {
     	init.set(true);
 	}
 	
+	/**
+	 * Use this for consumers
+	 * @return
+	 */
+	protected String getBrokerZKURI() {
+		return envs.get(Constants.BROKER_ZK_URI);
+	}
+	
+	/**
+	 * use this for producers
+	 * @return
+	 */
+	protected String getBrokerURI() {
+		return envs.get(Constants.BROKER_URI);
+	}
 	
 	public List<Container> newContainers(int numContainers, int memory, int maxRequestAttempts) throws IOException {
 		
@@ -193,22 +220,15 @@ public class YarnAppManager implements Watcher {
 			AMResponse amResp = allocateResponse.getAMResponse();
 			LOG.info("response received: " + amResp.getResponseId());
 
-			// tracking
-//			List<ContainerId> cId = new ArrayList<ContainerId>();
-
 			// Retrieve list of allocated containers from the response
-			// and on each allocated container, lets assume we are launching
-			// the same job.
 			List<Container> givenContainers = amResp.getAllocatedContainers();
-			LOG.info("containers given to AM: " + allocatedContainers.size());
+			LOG.info("containers given to AM: " + givenContainers.size());
 			if( givenContainers.size() > 0) {
 				allocatedContainers.addAll(givenContainers);
 				numCon = numCon + givenContainers.size();
 			}
-
 			rmRequestID++;
 		}
-		
 		return allocatedContainers;
 	}
 	
@@ -281,7 +301,7 @@ public class YarnAppManager implements Watcher {
 		StartContainerRequest startReq = Records.newRecord(StartContainerRequest.class);
 		startReq.setContainerLaunchContext(ctx);
 		cm.startContainer(startReq);
-		LOG.info("request sent to start broker");
+		LOG.info("request sent to start container: " + container.getId().toString());
 	}
 	
 }
