@@ -31,6 +31,7 @@ public class Constants {
 		insert(in,ENV_NAME,out);
 		insert(in,ENV_ZK_URI,out);
 		insert(in,ENV_HDFS_URI,out);
+		insert(in,BROKER_URI,out);
 		insert(in,BROKER_ZK_URI,out);
 		
 		//also put the classpath in the right var:

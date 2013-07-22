@@ -12,10 +12,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.AMRMProtocol;
@@ -49,7 +45,10 @@ import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.ZooDefs.Ids;
 
+import com.eqt.needle.constants.STATUS;
 import com.gman.broker.StandaloneBroker;
+import com.gman.notification.satus.StatusAM;
+import com.gman.notification.satus.StatusCom;
 import com.gman.util.Constants;
 import com.gman.util.YarnUtils;
 
@@ -81,6 +80,11 @@ public class YarnAppManager implements Watcher {
 	private Resource min;
 	private Resource max;
 	
+	private float progress = 0.0f;
+	protected StatusCom com = null;
+	
+	protected STATUS status = STATUS.PENDING;
+	
 	public YarnAppManager() throws IOException {
 		LOG.info("*******************");
 		LOG.info("YarnAppManager comming up");
@@ -102,6 +106,7 @@ public class YarnAppManager implements Watcher {
 		appAttemptID = containerId.getApplicationAttemptId();
 
 		host = envs.get(ApplicationConstants.NM_HOST_ENV);
+//		ApplicationConstants.NM_HTTP_PORT_ENV
 //		port = NetUtils.getFreeSocketPort();
 		
 		LOG.info("connecting to zookeeper: " + envs.get(Constants.ENV_ZK_URI));
@@ -125,6 +130,7 @@ public class YarnAppManager implements Watcher {
 		RegisterApplicationMasterRequest appMasterRequest = Records.newRecord(RegisterApplicationMasterRequest.class);
 		appMasterRequest.setApplicationAttemptId(appAttemptID);
 		appMasterRequest.setHost(host);
+//		appMasterRequest.setTrackingUrl("thisisatest");
 
 		if(embeddedBroker) {
 			LOG.info("setting up enbedded broker.");
@@ -135,6 +141,9 @@ public class YarnAppManager implements Watcher {
 			LOG.info("broker online at port: " + broker.getPort());
 		}
 		
+		//init needleStatusConsumer
+		com = new StatusAM(envs.get(Constants.BROKER_URI), envs.get(Constants.BROKER_ZK_URI));
+		
 		LOG.info("registring");
 		RegisterApplicationMasterResponse response = resourceManager.registerApplicationMaster(appMasterRequest);
 		min = response.getMinimumResourceCapability();
@@ -143,6 +152,12 @@ public class YarnAppManager implements Watcher {
 		
 	}
 
+	protected void incProgress(float by) {
+		progress+= by;
+		if(progress > 1.0f)
+			progress = 1.0f;
+	}
+	
 	@Override
 	public void process(WatchedEvent event) {
 		//TODO: when we go to multiple brokers this has to create more than 1 dir
@@ -185,6 +200,30 @@ public class YarnAppManager implements Watcher {
 		return envs.get(Constants.BROKER_URI);
 	}
 	
+	/**
+	 * Returns issued containers that the AM has no more need for back to the RM.
+	 * @param containers
+	 * @throws YarnRemoteException 
+	 */
+	public void releaseContainers(List<ContainerId> containers) throws YarnRemoteException {
+		AllocateRequest req = Records.newRecord(AllocateRequest.class);
+		req.setApplicationAttemptId(appAttemptID);
+		req.addAllReleases(containers);
+		req.setProgress(progress);
+		req.setResponseId(0);
+		resourceManager.allocate(req);
+	}
+	
+	/**
+	 * method for acquiring containers to put to work. Cannot do data locality yet, but will honor
+	 * memory requirements. Method may loop a fair few times up to maxRequestAttempts times to try
+	 * and get as many of the containers requested as possible before returning the ones given.
+	 * @param numContainers
+	 * @param memory
+	 * @param maxRequestAttempts
+	 * @return
+	 * @throws IOException
+	 */
 	public List<Container> newContainers(int numContainers, int memory, int maxRequestAttempts) throws IOException {
 		
 		List<Container> allocatedContainers = new ArrayList<Container>();
@@ -204,7 +243,7 @@ public class YarnAppManager implements Watcher {
 		//none to release in this case.
 		List<ContainerId> releasedContainers = new ArrayList<ContainerId>();
 		req.addAllReleases(releasedContainers);
-		req.setProgress(0.1f);
+		req.setProgress(progress);
 		AllocateResponse allocateResponse;
 
 		// loop until we get a container to startup in.
@@ -228,6 +267,7 @@ public class YarnAppManager implements Watcher {
 				numCon = numCon + givenContainers.size();
 			}
 			rmRequestID++;
+			//TODO: sleep a little to not spam RM??
 		}
 		return allocatedContainers;
 	}
