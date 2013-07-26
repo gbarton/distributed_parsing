@@ -47,6 +47,7 @@ import org.apache.zookeeper.ZooDefs.Ids;
 
 import com.eqt.needle.constants.STATUS;
 import com.gman.broker.StandaloneBroker;
+import com.gman.notification.ServerControl;
 import com.gman.notification.satus.StatusAM;
 import com.gman.notification.satus.StatusCom;
 import com.gman.util.Constants;
@@ -90,6 +91,7 @@ public class YarnAppManager implements Watcher {
 		LOG.info("YarnAppManager comming up");
 		LOG.info("*******************");
 		envs.putAll(System.getenv());
+		YarnUtils.dumpEnvs();
 
 		conf = new YarnConfiguration();
 //		conf.set("fs.defaultFS", envs.get(Constants.ENV_HDFS_URI));
@@ -99,8 +101,6 @@ public class YarnAppManager implements Watcher {
 			// container id should always be set in the env by the framework
 			throw new IllegalArgumentException("ContainerId not set in the environment");
 		}
-		for (String key : envs.keySet())
-			LOG.info("ENV PARAM: " + key + " " + envs.get(key));
 
 		containerId = ConverterUtils.toContainerId(containerIdString);
 		appAttemptID = containerId.getApplicationAttemptId();
@@ -138,11 +138,12 @@ public class YarnAppManager implements Watcher {
 			Thread tb = new Thread(broker,"broker");
 			tb.start();
 			envs.put(Constants.BROKER_URI, broker.getURI());
-			LOG.info("broker online at port: " + broker.getPort());
+			LOG.info("broker online at: " + broker.getURI());
 		}
 		
 		//init needleStatusConsumer
-		com = new StatusAM(envs.get(Constants.BROKER_URI), envs.get(Constants.BROKER_ZK_URI));
+//		com = new StatusAM(envs.get(Constants.BROKER_URI), envs.get(Constants.BROKER_ZK_URI));
+		ServerControl con = new ServerControl(envs.get(Constants.BROKER_URI), envs.get(Constants.BROKER_ZK_URI));
 		
 		LOG.info("registring");
 		RegisterApplicationMasterResponse response = resourceManager.registerApplicationMaster(appMasterRequest);
@@ -287,8 +288,19 @@ public class YarnAppManager implements Watcher {
 		return cm;
 	}
 	
-	//TODO: there is duplicated code with this and YarnClient.submitApplication, refactor
-	private void createContainer(Container container, ApplicationId appId, String appName, int amMemory,
+	/**
+	 * This creates and launches a container
+	 * TODO: there is duplicated code with this and YarnClient.submitApplication, refactor
+	 * @param container
+	 * @param appId
+	 * @param appName
+	 * @param amMemory
+	 * @param jarName
+	 * @param fileStatus
+	 * @param args
+	 * @throws YarnRemoteException
+	 */
+	private void launchContainer(Container container, ApplicationId appId, String appName, int amMemory,
 			String jarName, FileStatus fileStatus, String[] args) throws YarnRemoteException {
 		ContainerManager cm = getCM(container, conf);
 

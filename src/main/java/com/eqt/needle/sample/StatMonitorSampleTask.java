@@ -6,13 +6,15 @@ import java.lang.management.OperatingSystemMXBean;
 
 import javax.management.MBeanServerConnection;
 
+import com.eqt.needle.task.YarnTask;
+
 /**
  * Sample class of some kind of task that runs in yarn. This one reports system
  * usage and pops off periodic messages on the message bus.
  * Right now just monitors system load until I move to JDK 1.7.
  *
  */
-public class StatMonitorSampleTask {
+public class StatMonitorSampleTask extends YarnTask {
 
 	/**
 	 * @param args

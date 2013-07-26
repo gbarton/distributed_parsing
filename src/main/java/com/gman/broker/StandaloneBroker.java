@@ -80,7 +80,7 @@ public class StandaloneBroker implements Runnable, Watcher {
 	}
 	
 	public String getURI() throws UnknownHostException {
-		return InetAddress.getLocalHost().getHostAddress() +":" + getPort();
+		return InetAddress.getLocalHost().getHostName() +":" + getPort();
 	}
 	
 	public String getZKURI() throws UnknownHostException {

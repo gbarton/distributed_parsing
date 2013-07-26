@@ -55,11 +55,12 @@ public abstract class BaseNeedleCom<K,V> {
 						return new Thread(r, "consumer-" + topicFrom + "-" + num++);
 					}
 				});
-		LOG.info("BaseNeedleCommmunication online");
+		LOG.info("BaseNeedleCommmunication online. Broker: " + this.brokerURI + " zkUri: " + this.brokerZKURI);
 	}
 	
 	private void setupProducer() {
 		//producer setup
+		LOG.info("producer connector begin init");
 		Properties pprops = new Properties();
 		pprops.put("metadata.broker.list", brokerURI);
 		pprops.put("serializer.class", "kafka.serializer.StringEncoder");

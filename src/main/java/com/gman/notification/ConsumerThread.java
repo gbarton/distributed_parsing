@@ -11,6 +11,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.gman.util.Constants;
+
 import kafka.consumer.Consumer;
 import kafka.consumer.ConsumerConfig;
 import kafka.consumer.ConsumerIterator;
@@ -68,6 +70,7 @@ public abstract class ConsumerThread<K,V> implements Runnable {
 		//consumer setup
 		Properties cprops = new Properties();
 		cprops.put("zookeeper.connect", brokerZKURI);
+//		cprops.put("metadata.broker.list", System.getenv(Constants.BROKER_URI));
         //TODO: do i need different group names? probably need to be unique
 		cprops.put("group.id", "group-" + System.currentTimeMillis());
 		cprops.put("zookeeper.session.timeout.ms", "4000");

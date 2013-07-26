@@ -47,4 +47,10 @@ public class YarnUtils {
 		return rsrcRequest;
 	}
 	
+	public static void dumpEnvs() {
+		LOG.info("currently known enviroment variables");
+		for(String key :System.getenv().keySet())
+			LOG.info(key + ": " + System.getenv(key));
+	}
+	
 }
