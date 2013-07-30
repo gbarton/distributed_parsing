@@ -15,7 +15,7 @@ public class SimplePartitioner implements Partitioner<String> {
     public int partition(String key, int numPartitions) {
     	if (numPartitions == 1)
     		return 1 % 1;
-    	return (key.hashCode()) % numPartitions;
+    	return Math.abs(key.hashCode()) % numPartitions;
   }
 
 }

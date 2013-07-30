@@ -18,6 +18,8 @@ import org.codehaus.jackson.JsonGenerationException;
 import org.codehaus.jackson.map.JsonMappingException;
 import org.codehaus.jackson.map.ObjectMapper;
 
+import com.eqt.needle.notification.Message;
+
 public class Consumer<K,V> {
 	private static final Log LOG = LogFactory.getLog(Consumer.class);
 

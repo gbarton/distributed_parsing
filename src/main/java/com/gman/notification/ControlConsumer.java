@@ -11,6 +11,7 @@ import org.codehaus.jackson.JsonParseException;
 import org.codehaus.jackson.map.JsonMappingException;
 import org.codehaus.jackson.map.ObjectMapper;
 
+import com.eqt.needle.notification.Message;
 import com.gman.notification.EventProcessor.Control;
 import com.gman.notification.EventProcessor.WorkUnit;
 

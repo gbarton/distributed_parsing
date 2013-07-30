@@ -10,6 +10,8 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.eqt.needle.notification.Message;
+
 import kafka.javaapi.producer.Producer;
 import kafka.producer.ProducerConfig;
 

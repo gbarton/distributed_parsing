@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.eqt.needle.notification.Message;
 import com.gman.util.Constants;
 
 import kafka.consumer.Consumer;

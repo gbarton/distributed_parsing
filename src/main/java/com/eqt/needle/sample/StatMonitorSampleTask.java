@@ -16,6 +16,9 @@ import com.eqt.needle.task.YarnTask;
  */
 public class StatMonitorSampleTask extends YarnTask {
 
+	
+	
+	
 	/**
 	 * @param args
 	 * @throws IOException 

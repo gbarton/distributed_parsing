@@ -12,9 +12,9 @@ import org.codehaus.jackson.map.JsonMappingException;
 import org.codehaus.jackson.map.ObjectMapper;
 
 import com.eqt.needle.constants.STATUS;
+import com.eqt.needle.notification.Message;
 import com.gman.notification.BaseNeedleCom;
 import com.gman.notification.ConsumerThread;
-import com.gman.notification.Message;
 
 public class StatusCom extends BaseNeedleCom<STATUS, String> {
 	private static final Log LOG = LogFactory.getLog(StatusCom.class);

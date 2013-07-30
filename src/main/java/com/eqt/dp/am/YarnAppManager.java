@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import kafka.javaapi.producer.Producer;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -46,6 +48,8 @@ import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.ZooDefs.Ids;
 
 import com.eqt.needle.constants.STATUS;
+import com.eqt.needle.notification.KafkaUtils;
+import com.eqt.needle.notification.StatusReporter;
 import com.gman.broker.StandaloneBroker;
 import com.gman.notification.ServerControl;
 import com.gman.notification.satus.StatusAM;
@@ -82,7 +86,9 @@ public class YarnAppManager implements Watcher {
 	private Resource max;
 	
 	private float progress = 0.0f;
-	protected StatusCom com = null;
+//	protected StatusCom com = null;
+	protected StatusReporter statusReporter = null;
+	protected Producer<String, String> prod = null;
 	
 	protected STATUS status = STATUS.PENDING;
 	
@@ -143,7 +149,9 @@ public class YarnAppManager implements Watcher {
 		
 		//init needleStatusConsumer
 //		com = new StatusAM(envs.get(Constants.BROKER_URI), envs.get(Constants.BROKER_ZK_URI));
-		ServerControl con = new ServerControl(envs.get(Constants.BROKER_URI), envs.get(Constants.BROKER_ZK_URI));
+//		ServerControl con = new ServerControl(envs.get(Constants.BROKER_URI), envs.get(Constants.BROKER_ZK_URI));
+		prod = KafkaUtils.getProducer(broker.getURI());
+		statusReporter = new StatusReporter(prod,broker.getURI(),status,true);
 		
 		LOG.info("registring");
 		RegisterApplicationMasterResponse response = resourceManager.registerApplicationMaster(appMasterRequest);

@@ -19,7 +19,7 @@ public class StatMonitorExampleClient extends YarnClient {
 		this.amClassName = "com.eqt.needle.sample.StatMonitorSampleAM";
 		this.pathToHDFSJar = "/dp.jar";
 		//default is 512, can override if desired.
-		amMemory = 512;
+		this.amMemory = 512;
 	}
 
 	/**

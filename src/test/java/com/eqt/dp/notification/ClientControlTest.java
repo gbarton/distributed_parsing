@@ -10,12 +10,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.eqt.needle.notification.Message;
 import com.gman.broker.EmbeddedZK;
 import com.gman.broker.StandaloneBroker;
 import com.gman.notification.ClientControl;
 import com.gman.notification.EventProcessor.Control;
 import com.gman.notification.EventProcessor.WorkUnit;
-import com.gman.notification.Message;
 import com.gman.notification.ServerControl;
 
 public class ClientControlTest {
@@ -35,6 +35,7 @@ public class ClientControlTest {
 		Thread tb = new Thread(broker,"broker");
 		tb.start();
 		ser = new ServerControl(broker.getURI(), broker.getZKURI());
+//		ser.sendMessage(new Message<Control, WorkUnit>(Control.FAILED, new WorkUnit("bka", "bla")));
 		con = new ClientControl(broker.getURI(),broker.getZKURI());
 
 	}
