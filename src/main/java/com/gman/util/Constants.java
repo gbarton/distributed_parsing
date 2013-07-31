@@ -4,9 +4,11 @@ import java.util.Map;
 
 public class Constants {
 
-//	public static final String JAR_NAME = "dp.jar";
-	public static final String ENV_JAR = "dp_env_jar";
+	public static final String ENV_APPID = "needle_app_id";
+	public static final String ENV_JAR = "needle_env_jar";
+	public static final String ENV_JAR_PATH = "needle_env_jar_path";
 	public static final String ENV_CLASSPATH = "dp_class_path";
+
 	//unique name that we can use for various pathing
 	public static final String ENV_NAME = "dp_name";
 	public static final String ENV_ZK_URI = "dp_zk_uri";
@@ -26,7 +28,9 @@ public class Constants {
 	 * probably a better way to do this..
 	 */
 	public static void fill(Map<String,String> in, Map<String,String> out) {
+		insert(in,ENV_APPID,out);
 		insert(in,ENV_JAR,out);
+		insert(in,ENV_JAR_PATH,out);
 		insert(in,ENV_CLASSPATH,out);
 		insert(in,ENV_NAME,out);
 		insert(in,ENV_ZK_URI,out);

@@ -8,12 +8,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import kafka.javaapi.producer.Producer;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.AMRMProtocol;
@@ -25,8 +25,6 @@ import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterReque
 import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterResponse;
 import org.apache.hadoop.yarn.api.protocolrecords.StartContainerRequest;
 import org.apache.hadoop.yarn.api.records.AMResponse;
-import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
-import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.Container;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.ContainerLaunchContext;
@@ -47,7 +45,7 @@ import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.ZooDefs.Ids;
 
-import com.eqt.needle.constants.STATUS;
+import com.eqt.needle.BasicYarnService;
 import com.eqt.needle.notification.DiscoveryService;
 import com.eqt.needle.notification.KafkaUtils;
 import com.eqt.needle.notification.StatusReporter;
@@ -55,8 +53,8 @@ import com.gman.broker.StandaloneBroker;
 import com.gman.util.Constants;
 import com.gman.util.YarnUtils;
 
-public class YarnAppManager implements Watcher {
-	private static final Log LOG = LogFactory.getLog(YarnAppManager.class);
+public class YarnAppManager extends BasicYarnService implements Watcher {
+	protected static final Log LOG = LogFactory.getLog(YarnAppManager.class);
 	private AtomicBoolean init = new AtomicBoolean(false);
 	
 	//override to make the brokers external to the AM, this also will make them
@@ -66,14 +64,13 @@ public class YarnAppManager implements Watcher {
 	private StandaloneBroker broker = null;
 
 	private ZooKeeper zk;
-	private ContainerId containerId;
-	private ApplicationAttemptId appAttemptID;
-	// Configuration
-	private Configuration conf;
+
 	// YARN RPC to communicate with the Resource Manager or Node Manager
 	private YarnRPC rpc;
 	private AMRMProtocol resourceManager;
-	Map<String, String> envs = new HashMap<String, String>();
+	
+	//fs, cause its good to have one.
+	protected FileSystem fs;
 	
 	//info about where we are running
 	private String host;
@@ -84,24 +81,17 @@ public class YarnAppManager implements Watcher {
 	private Resource max;
 	
 	private float progress = 0.0f;
-
-	//communications
-	protected StatusReporter statusReporter = null;
-	protected DiscoveryService discoveryService = null;
-	protected Producer<String, String> prod = null;
 	
-	protected STATUS status = STATUS.PENDING;
 	
 	public YarnAppManager() throws IOException {
+		super();
 		LOG.info("*******************");
 		LOG.info("YarnAppManager comming up");
 		LOG.info("*******************");
-		envs.putAll(System.getenv());
-		YarnUtils.dumpEnvs();
 
-		conf = new YarnConfiguration();
 //		conf.set("fs.defaultFS", envs.get(Constants.ENV_HDFS_URI));
 		rpc = YarnRPC.create(conf);
+		fs = FileSystem.get(conf);
 		String containerIdString = envs.get(ApplicationConstants.AM_CONTAINER_ID_ENV);
 		if (containerIdString == null) {
 			// container id should always be set in the env by the framework
@@ -136,6 +126,7 @@ public class YarnAppManager implements Watcher {
 		RegisterApplicationMasterRequest appMasterRequest = Records.newRecord(RegisterApplicationMasterRequest.class);
 		appMasterRequest.setApplicationAttemptId(appAttemptID);
 		appMasterRequest.setHost(host);
+		//TODO: not sure how to use this yet....
 //		appMasterRequest.setTrackingUrl("thisisatest");
 
 		if(embeddedBroker) {
@@ -145,12 +136,13 @@ public class YarnAppManager implements Watcher {
 			tb.start();
 			envs.put(Constants.BROKER_URI, broker.getURI());
 			LOG.info("broker online at: " + broker.getURI());
+			this.brokerUri = broker.getURI();
 		}
 		
 		//init basic topics and a producer
-		prod = KafkaUtils.getProducer(broker.getURI());
-		statusReporter = new StatusReporter(prod,broker.getURI(),status,true);
-		discoveryService = new DiscoveryService(prod, "AM", broker.getURI());
+		prod = KafkaUtils.getProducer(this.brokerUri);
+		statusReporter = new StatusReporter(prod,this.brokerUri,status,true);
+		discoveryService = new DiscoveryService(prod, "AM", this.brokerUri);
 		
 		LOG.info("registring");
 		RegisterApplicationMasterResponse response = resourceManager.registerApplicationMaster(appMasterRequest);
@@ -299,21 +291,19 @@ public class YarnAppManager implements Watcher {
 	 * This creates and launches a container
 	 * TODO: there is duplicated code with this and YarnClient.submitApplication, refactor
 	 * @param container
-	 * @param appId
 	 * @param appName
 	 * @param amMemory
 	 * @param jarName
 	 * @param fileStatus
-	 * @param args
-	 * @throws YarnRemoteException
+	 * @param args TODO: ignored atm.
+	 * @throws IOException 
 	 */
-	private void launchContainer(Container container, ApplicationId appId, String appName, int amMemory,
-			String jarName, FileStatus fileStatus, String[] args) throws YarnRemoteException {
+	public void launchContainer(Container container, String appName, int amMemory, String[] args) throws IOException {
 		ContainerManager cm = getCM(container, conf);
+		FileStatus fileStatus = fs.getFileStatus(new Path(envs.get(Constants.ENV_JAR_PATH)));
 
 		// Now we setup a ContainerLaunchContext
 		ContainerLaunchContext ctx = Records.newRecord(ContainerLaunchContext.class);
-
 		ctx.setContainerId(container.getId());
 		ctx.setResource(container.getResource());
 
@@ -323,8 +313,7 @@ public class YarnAppManager implements Watcher {
 			LOG.error("Getting current user failed when trying to launch the container", e);
 		}
 
-		// Set the environment, hopefully everythings been past down from
-		// AppMan.
+		// Set the environment, will pull along anything setup from the client as well as new broker stuffs.
 		Map<String, String> env = new HashMap<String, String>();
 		Constants.fill(System.getenv(), env);
 		// i think this shoulda been done FOR me
@@ -342,7 +331,7 @@ public class YarnAppManager implements Watcher {
 		shellRsrc.setTimestamp(fileStatus.getModificationTime());
 		shellRsrc.setSize(fileStatus.getLen());
 
-		localResources.put(jarName, shellRsrc);
+		localResources.put(envs.get(Constants.ENV_JAR), shellRsrc);
 
 		ctx.setLocalResources(localResources);
 
@@ -362,5 +351,4 @@ public class YarnAppManager implements Watcher {
 		cm.startContainer(startReq);
 		LOG.info("request sent to start container: " + container.getId().toString());
 	}
-	
 }

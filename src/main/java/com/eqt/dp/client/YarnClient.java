@@ -215,6 +215,7 @@ public class YarnClient {
 		String classPathEnv = "$(hadoop classpath):./*:";
 		env.put("CLASSPATH", classPathEnv);
 		env.put(Constants.ENV_CLASSPATH, classPathEnv);
+		env.put(Constants.ENV_JAR_PATH,pathToHDFSJar);
 		env.put(Constants.ENV_JAR, jarName);
 		env.put(Constants.ENV_NAME,appId.toString());
 		//TODO:hardcodes bad

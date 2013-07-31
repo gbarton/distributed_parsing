@@ -231,7 +231,7 @@ public class NeedleConsumer implements Runnable {
 		for (HostPort hp : brokers) {
 			SimpleConsumer consumer = null;
 			try {
-				consumer = getConsumer(hp, "leaderLookup");
+				consumer = new SimpleConsumer(hp.host, hp.port, 100000, 64 * 1024, "leaderLookup");
 				List<String> topics = new ArrayList<String>();
 				topics.add(a_topic);
 				TopicMetadataRequest req = new TopicMetadataRequest(topics);
