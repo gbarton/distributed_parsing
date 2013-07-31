@@ -86,7 +86,7 @@ public class NeedleConsumer implements Runnable {
 	}
 
 	public Message<String,String> getNextMessage() {
-		LOG.info("getNextMessage Called for topic: " + topic + " partition: " + partition);
+		LOG.debug("getNextMessage Called for topic: " + topic + " partition: " + partition);
 		return messages.poll();
 	}
 	
@@ -95,6 +95,10 @@ public class NeedleConsumer implements Runnable {
 	}
 	
 	private SimpleConsumer getConsumer(HostPort broker) {
+		return getConsumer(broker, clientName);
+	}
+	
+	private SimpleConsumer getConsumer(HostPort broker, String name) {
 		return new SimpleConsumer(broker.host, broker.port, timeOut, bufferSize, clientName);
 	}
 	
@@ -113,7 +117,7 @@ public class NeedleConsumer implements Runnable {
 				consumer = getConsumer(leadBroker);
 			}
 			FetchRequest req = new FetchRequestBuilder().clientId(clientName)
-					.addFetch(topic, partition, readOffset, 100000).build();
+					.addFetch(topic, partition, readOffset, timeOut).build();
 			FetchResponse fetchResponse = consumer.fetch(req);
 
 			if (fetchResponse.hasError()) {
@@ -146,7 +150,7 @@ public class NeedleConsumer implements Runnable {
 				}
 				readOffset = messageAndOffset.nextOffset();
 				try {
-					LOG.info("##################### received a message! on topic: " + topic + " partition " + partition);
+					LOG.debug("##################### received a message! on topic: " + topic + " partition " + partition);
 					messages.put(new Message<String, String>(
 							convertBytesToString(messageAndOffset.message().key()),
 							convertBytesToString(messageAndOffset.message().payload())));
@@ -227,7 +231,7 @@ public class NeedleConsumer implements Runnable {
 		for (HostPort hp : brokers) {
 			SimpleConsumer consumer = null;
 			try {
-				consumer = new SimpleConsumer(hp.host, hp.port, 100000, 64 * 1024, "leaderLookup");
+				consumer = getConsumer(hp, "leaderLookup");
 				List<String> topics = new ArrayList<String>();
 				topics.add(a_topic);
 				TopicMetadataRequest req = new TopicMetadataRequest(topics);

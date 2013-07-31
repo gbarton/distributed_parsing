@@ -4,6 +4,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import kafka.javaapi.producer.Producer;
 import kafka.producer.KeyedMessage;
 
@@ -13,7 +16,7 @@ import kafka.producer.KeyedMessage;
  * NOTE: service best be unique!
  */
 public class DiscoveryService extends TopicConsumer {
-	
+	private static final Log LOG = LogFactory.getLog(DiscoveryService.class);
 	private static final String TOPIC = "discovery_topic";
 	
 	Map<String, Map<String,String>> services = new HashMap<String, Map<String,String>>();
@@ -27,6 +30,31 @@ public class DiscoveryService extends TopicConsumer {
 		super(TOPIC,brokerUri);
 		String keyValue = "created:" + System.currentTimeMillis();
 		prod.send(new KeyedMessage<String, String>(TOPIC, serviceId, keyValue));
+		Thread t = new Thread(new Runnable() {
+			
+			@Override
+			public void run() {
+				while(true) {
+					Message<String,String> message = getNextStringMessage();
+					if(message != null) {
+						String[] kv = message.value.split(":");
+						LOG.info("DiscoveryService received property for service: " + message.key + " => " + message.value);
+						//make sure valid kv
+						if(kv.length != 2)
+							continue;
+						if(!services.containsKey(message.key))
+							services.put(message.key, new HashMap<String,String>());
+						services.get(message.key).put(kv[0], kv[1]);
+					} else
+						try {
+							Thread.sleep(1000);
+						} catch (InterruptedException e) {
+							LOG.warn("troubles sleeping on the cores, keep getting woken up");
+						}
+				}
+			}
+		});
+		t.start();
 	}
 	
 	public void sendInfo(Producer<String,String> prod, String service, String key, String value) {
