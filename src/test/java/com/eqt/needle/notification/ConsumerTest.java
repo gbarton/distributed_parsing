@@ -33,11 +33,6 @@ public class ConsumerTest {
 		broker = new StandaloneBroker(zk.getURI());
 		Thread tb = new Thread(broker,"broker");
 		tb.start();
-		
-//		ser = new ServerControl(broker.getURI(), broker.getZKURI());
-//		ser.sendMessage(new Message<Control, WorkUnit>(Control.FAILED, new WorkUnit("bka", "bla")));
-//		con = new ClientControl(broker.getURI(),broker.getZKURI());
-
 	}
 	
 	@After
@@ -56,10 +51,8 @@ public class ConsumerTest {
 		int sent = 0;
 		
 		Producer<String, String> prod = KafkaUtils.getProducer(broker.getURI());
-		prod.send(new KeyedMessage<String, String>(topic,"bla", "bla-"));
 
-		TopicConsumer tc = new TopicConsumer(topic,prod);
-		tc.init(broker.getURI());
+		TopicConsumer tc = new TopicConsumer(topic,broker.getURI());
 		int got = 0;
 		int tries = total;
 		while(got != total) {
@@ -79,21 +72,18 @@ public class ConsumerTest {
 		tc.close();
 		assertEquals(sent, got);
 	}
-
-	
 	
 	@Test
 	public void testMultiMessage() throws UnknownHostException, InterruptedException {
 		String topic = "test";
 		int sent = 50;
+		TopicConsumer tc = new TopicConsumer(topic,broker.getURI());
 		Producer<String, String> prod = KafkaUtils.getProducer(broker.getURI());
-		TopicConsumer tc = new TopicConsumer(topic, prod);
 
 		for(int i = 0; i <= sent;i++) {
 			prod.send(new KeyedMessage<String, String>(topic,"bla", "bla-"+i));
 		}
 		
-		tc.init(broker.getURI());
 		int got = 0;
 		int tries = sent;
 		while(got != sent) {

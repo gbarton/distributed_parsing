@@ -26,9 +26,8 @@ public class StatusReporter extends TopicConsumer {
 	 * @param isAM
 	 */
 	public StatusReporter(Producer<String,String> prod, String brokerUri,STATUS initialStatus, boolean isAM) {
-		super(isAM?TOPIC_TO_TASKS:TOPIC_TO_AM,prod);
+		super(isAM?TOPIC_TO_TASKS:TOPIC_TO_AM,brokerUri);
 		this.isAM = isAM;
-		init(brokerUri);
 	}
 	
 	public void sendMessage(Producer<String, String> prod, STATUS key, String value) {

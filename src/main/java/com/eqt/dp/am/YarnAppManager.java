@@ -48,12 +48,10 @@ import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.ZooDefs.Ids;
 
 import com.eqt.needle.constants.STATUS;
+import com.eqt.needle.notification.DiscoveryService;
 import com.eqt.needle.notification.KafkaUtils;
 import com.eqt.needle.notification.StatusReporter;
 import com.gman.broker.StandaloneBroker;
-import com.gman.notification.ServerControl;
-import com.gman.notification.satus.StatusAM;
-import com.gman.notification.satus.StatusCom;
 import com.gman.util.Constants;
 import com.gman.util.YarnUtils;
 
@@ -86,8 +84,10 @@ public class YarnAppManager implements Watcher {
 	private Resource max;
 	
 	private float progress = 0.0f;
-//	protected StatusCom com = null;
+
+	//communications
 	protected StatusReporter statusReporter = null;
+	protected DiscoveryService discoveryService = null;
 	protected Producer<String, String> prod = null;
 	
 	protected STATUS status = STATUS.PENDING;
@@ -147,11 +147,10 @@ public class YarnAppManager implements Watcher {
 			LOG.info("broker online at: " + broker.getURI());
 		}
 		
-		//init needleStatusConsumer
-//		com = new StatusAM(envs.get(Constants.BROKER_URI), envs.get(Constants.BROKER_ZK_URI));
-//		ServerControl con = new ServerControl(envs.get(Constants.BROKER_URI), envs.get(Constants.BROKER_ZK_URI));
+		//init basic topics and a producer
 		prod = KafkaUtils.getProducer(broker.getURI());
 		statusReporter = new StatusReporter(prod,broker.getURI(),status,true);
+		discoveryService = new DiscoveryService(prod, "AM", broker.getURI());
 		
 		LOG.info("registring");
 		RegisterApplicationMasterResponse response = resourceManager.registerApplicationMaster(appMasterRequest);

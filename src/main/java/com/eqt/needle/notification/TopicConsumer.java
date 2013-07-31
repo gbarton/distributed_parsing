@@ -40,18 +40,22 @@ public class TopicConsumer {
 	
 	/**
 	 * Will initialize the topic by sending an init message accross it.
-	 * NOTE: you still must call one of the init() methods before using the consumers.
 	 */
-	public TopicConsumer(String topic, Producer<String,String> prod) {
+	public TopicConsumer(String topic,String brokers) {
 		this.topic = topic;
-		prod.send(new KeyedMessage<String, String>(topic, initContents,initContents));
+		init(brokers);
+	}
+	
+	protected TopicConsumer(String topic, List<String> seedBrokers) {
+		this.topic = topic;
+		init(seedBrokers);
 	}
 	
 	/***
 	 * @param topic
 	 * @param brokers can be a , separated host:port list of brokers
 	 */
-	protected void init(String brokers) {
+	private void init(String brokers) {
 		String[] b = brokers.split(",");
 		List<String> l = new ArrayList<String>();
 		for(String s : b)
@@ -59,7 +63,7 @@ public class TopicConsumer {
 		init(l);
 	}
 	
-	protected void init(List<String> seedBrokers) {
+	private void init(List<String> seedBrokers) {
 		this.seedBrokers = seedBrokers;
 		this.brokers = HostPort.build(seedBrokers);
 		
