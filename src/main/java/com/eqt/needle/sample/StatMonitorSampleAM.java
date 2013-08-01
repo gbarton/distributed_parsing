@@ -28,37 +28,39 @@ public class StatMonitorSampleAM extends YarnAppManager {
 	public void start() {
 		//run forever
 		while(true) {
-		try {
-			List<Container> newContainers = newContainers(1, 512, 10);
-			List<ContainerId> releaseContainers = new ArrayList<ContainerId>();
-			if(newContainers.size() > 0) {
-				for(Container c : newContainers) {
-					LOG.info("found new container: " + c.toString());
-					//new host, lets add it.
-					if(!hosts.contains((c.getNodeHttpAddress()))) {
-						LOG.info("launching: " + c.toString());
-						hosts.add(c.getNodeHttpAddress());
-						launchContainer(c, "com.eqt.needle.sample.StatMonitorSampleTask", 512, null);
-						LOG.info("launched: " + c.toString());
-					} else 
-						releaseContainers.add(c.getId());
+			try {
+				List<Container> newContainers = newContainers(1, 512, 10);
+				List<ContainerId> releaseContainers = new ArrayList<ContainerId>();
+				if(newContainers.size() > 0) {
+					for(Container c : newContainers) {
+						LOG.info("found new container: " + c.toString());
+						//new host, lets add it.
+						if(!hosts.contains((c.getNodeHttpAddress()))) {
+							LOG.info("launching: " + c.toString());
+							hosts.add(c.getNodeHttpAddress());
+							launchContainer(c, "com.eqt.needle.sample.StatMonitorSampleTask", 512, null);
+							LOG.info("launched: " + c.toString());
+						} else 
+							releaseContainers.add(c.getId());
+					}
+					//send back the ones we didnt want.
+					releaseContainers(releaseContainers);
 				}
-				//send back the ones we didnt want.
-				releaseContainers(releaseContainers);
+				
+				Message<STATUS,String> message = statusReporter.getNextMessage();
+				while(message != null) {
+					LOG.info("Status reported from Task: "+ message.key + " " + message.value);
+					updateClient(message.key.toString(), message.value);
+					message = statusReporter.getNextMessage();
+				}
+				Thread.sleep(1000);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
-			
-			Message<STATUS,String> message = statusReporter.getNextMessage();
-			while(message != null) {
-				LOG.info("Status reported from Task: "+ message.key + " " + message.value);
-			}
-			Thread.sleep(1000);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 		}
 		
 	}
@@ -75,7 +77,5 @@ public class StatMonitorSampleAM extends YarnAppManager {
 		System.out.println("sleeping");
 		while(true)
 			Thread.sleep(1000);
-
 	}
-
 }

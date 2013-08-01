@@ -6,6 +6,8 @@ import java.lang.management.OperatingSystemMXBean;
 
 import javax.management.MBeanServerConnection;
 
+import org.codehaus.jackson.map.ObjectMapper;
+
 import com.eqt.needle.constants.STATUS;
 import com.eqt.needle.task.YarnTask;
 
@@ -25,10 +27,16 @@ public class StatMonitorSampleTask extends YarnTask {
 		mbsc, ManagementFactory.OPERATING_SYSTEM_MXBEAN_NAME, OperatingSystemMXBean.class);
 		status = STATUS.STARTED;
 		statusReporter.sendMessage(prod, status, "");
+		ObjectMapper mapper = new ObjectMapper();
 		while(true) {
 			double cpu = osMBean.getSystemLoadAverage();
 			System.out.println("Cpu usage: "+cpu+"%");
-			statusReporter.sendMessage(prod, status, cpu+"");
+			Payload p = new Payload();
+			p.cores = osMBean.getAvailableProcessors();
+			p.loadAverage = osMBean.getSystemLoadAverage();
+			p.happenedAt = System.currentTimeMillis() / (10*1000); //nearest 10 seconds
+			
+			statusReporter.sendMessage(prod, status, mapper.writeValueAsString(p));
 			Thread.sleep(1000*60);
 		}
 	}

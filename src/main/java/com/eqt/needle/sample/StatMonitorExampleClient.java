@@ -7,8 +7,10 @@ import com.eqt.dp.client.YarnClient;
 /**
  * Sample client class to show you how to lauch an ApplicationMaster into
  * Yarn.  Not much work involved to get up and running.
- * The sample yarn application that runs will monitor stats of a given cluster
- * (right now assumes a psuedo-install with 1 NodeManager as I just launch 1 task)
+ * 
+ * The sample yarn application that runs will monitor stats of a given cluster through a brute force
+ * method of always pinging the RM for new containers and checking to see if it knows of that host yet.
+ * 
  * @author gman
  *
  */

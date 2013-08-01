@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -36,7 +37,16 @@ import org.apache.hadoop.yarn.exceptions.YarnRemoteException;
 import org.apache.hadoop.yarn.ipc.YarnRPC;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
+import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.ZooDefs.Ids;
+import org.apache.zookeeper.data.Stat;
 
+import com.eqt.needle.notification.Message;
+import com.eqt.needle.notification.TopicConsumer;
 import com.gman.util.Constants;
 import com.gman.util.YarnUtils;
 
@@ -45,8 +55,9 @@ import com.gman.util.YarnUtils;
  * Must call constructor and then populate all the important marked vars
  * @author gman
  */
-public class YarnClient {
+public class YarnClient implements Watcher {
 	private static final Log LOG = LogFactory.getLog(YarnClient.class);
+	private AtomicInteger init = new AtomicInteger(0);
 	
 	// Configuration
 	protected Configuration conf;
@@ -59,6 +70,7 @@ public class YarnClient {
 	//fs, cause its good to have one.
 	protected FileSystem fs;
 	
+	private ZooKeeper zk;
 	
 	protected String zkURI = null;
 	//derived from pathToHDFSJar
@@ -73,12 +85,15 @@ public class YarnClient {
 	//REQUIRED, dont have to add anything if you dont wanna.
 	protected Map<String,String> otherArgs = new HashMap<String, String>();
 	
+	protected String brokerUri = null;
+	
+	protected TopicConsumer clientFeed = null;
 	
 	public YarnClient(String zkURI) throws IOException {
-		//TODO: better checking
+		
+		//TODO: better checking of the uri coming in.
 		if (zkURI == null)
 			throw new IOException("must pass in a valid zk uri");
-		this.zkURI = zkURI;
 		
 		conf = new YarnConfiguration();
 		LOG.info("fs.default.name set to: " + conf.get("fs.default.name"));
@@ -89,22 +104,93 @@ public class YarnClient {
 		Configuration appsManagerServerConf = new Configuration(conf);
 		applicationsManager = ((ClientRMProtocol) rpc
 				.getProxy(ClientRMProtocol.class, rmAddress, appsManagerServerConf));
-		LOG.info("grabbed a FileSystem handle");
-		fs = FileSystem.get(conf);
-	}
-
-	/**
-	 * Launches the app and goes into a spin cycle until the end of time.
-	 * (or until the user hits q)
-	 */
-	public void start() throws IOException, InterruptedException {
+		
 		GetNewApplicationRequest request = Records.newRecord(GetNewApplicationRequest.class);
 		GetNewApplicationResponse resp = applicationsManager.getNewApplication(request);
 		appId = resp.getApplicationId();
 		LOG.info("Got new ApplicationId: " + appId);
 		LOG.info("Cluster minRam:" + resp.getMinimumResourceCapability().getMemory());
 		LOG.info("Cluster maxRam:" + resp.getMaximumResourceCapability().getMemory());
+
+		this.zkURI = zkURI;
+		LOG.info("zkconnect string: " + zkURI);
 		
+		LOG.info("connecting to zookeeper: " + zkURI);
+		zk = new ZooKeeper(zkURI,3000,this);
+		LOG.info("spinning until initialization complete.");
+		while(init.get() < 2)
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				LOG.warn("trouble sleeping.");
+			}
+		
+		LOG.info("completed ZK initialization");
+
+		LOG.info("grabbed a FileSystem handle");
+		fs = FileSystem.get(conf);
+	}
+
+	//TODO" this is too close to the one in YarnAppManager, refactor??
+	@Override
+	public void process(WatchedEvent event) {
+    	LOG.info("zookeeper connection complete");
+
+    	//no work, release cycle lock #2
+		if(init.get() == 1) {
+			init.getAndIncrement();
+			return;
+		}
+		
+		//TODO: when we go to multiple brokers this has to create more than 1 dir
+    	String path = "/" + Constants.ZK_URI_BASE_PATH;
+    	try {
+    		if(zk.exists(path, false) == null) {
+    	    	LOG.info("creating path: " + path);
+    			zk.create(path,null,Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+    		}
+    		String appPath = path + "/" + appId.toString();
+	    	LOG.info("creating path: " + appPath);
+	    	zk.create(appPath,null,Ids.OPEN_ACL_UNSAFE,CreateMode.PERSISTENT);
+	    	String propsPath = appPath + Constants.ZK_CLIENT_BASE_PATH;
+	    	LOG.info("creating path: " + propsPath);
+	    	zk.create(propsPath,null,Ids.OPEN_ACL_UNSAFE,CreateMode.PERSISTENT);
+			LOG.info("base store paths created");
+			if(!this.zkURI.endsWith("/")) //not final / (i think thats invalid anyways??)
+				this.zkURI += "/";
+			//add our root.
+			this.zkURI += Constants.ZK_URI_BASE_PATH + "/" + appId.toString();
+
+		} catch (KeeperException e) {
+			LOG.error("total fail with zk", e);
+			System.exit(1);
+		} catch (InterruptedException e) {
+			LOG.error("total fail with zk", e);
+			System.exit(1);
+		} finally {
+			//we close this con so we can open another one rooted.
+			try {
+				zk.close();
+			} catch (InterruptedException e) {
+				//gulp
+			} finally {
+				try {
+			    	//release spin cycle lock #1
+			    	init.getAndIncrement();
+					zk = new ZooKeeper(this.zkURI,3000,this);
+				} catch (IOException e) {
+					LOG.error("zk is mis behaving.",e);
+					System.exit(1);
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Launches the app and goes into a spin cycle until the end of time.
+	 * (or until the user hits q)
+	 */
+	public void start() throws IOException, InterruptedException {
 		//lets make a dir in HDFS to use:
 		fs.mkdirs(new Path("/"+appId.toString()));
 		
@@ -133,6 +219,28 @@ public class YarnClient {
 		ApplicationReport report = reportResponse.getApplicationReport();
 		LOG.info("AppManager up on: " + report.getHost() + ":" + report.getRpcPort());
 		LOG.info("diag: " + report.getDiagnostics());
+		
+		LOG.info("waiting for broker notification");
+		String propsPath = Constants.ZK_CLIENT_BASE_PATH;
+		//TODO: could use a watch here instead..
+		while(true)
+			try {
+				List<String> children = zk.getChildren(propsPath, false);
+				if(children.contains(Constants.CLIENT_BROKER_LOCATION)) {
+					this.brokerUri = new String(zk.getData(
+							propsPath+"/"+Constants.CLIENT_BROKER_LOCATION,
+							false, new Stat()));
+					break;
+				}
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				LOG.warn("trouble sleeping.");
+			} catch (KeeperException e) {
+				LOG.error("zk connection lost.");
+				throw new IOException("zk flaked on us",e);
+			}
+		LOG.info("broker receieved: " + brokerUri);
+		clientFeed = new TopicConsumer(Constants.TOPIC_CLIENT_FEED, this.brokerUri);
 
 		long start = System.currentTimeMillis();
 		LOG.info("going into spin cycle:");
@@ -154,6 +262,13 @@ public class YarnClient {
 				}
 			}
 
+			//read messages:
+			Message<String,String> message = clientFeed.getNextStringMessage();
+			while(message != null) {
+				LOG.info("Status reported from Task: "+ message.key + " " + message.value);
+				message = clientFeed.getNextStringMessage();
+			}
+			
 			Thread.sleep(500);
 			long now = System.currentTimeMillis();
 			if (now - start > 5000) {
@@ -178,6 +293,13 @@ public class YarnClient {
 		
 		//TODO: clean the directory up in HDFS
 		fs.close();
+		
+		if(zk != null)
+			try {
+				zk.close();
+			} catch (InterruptedException e) {
+				LOG.warn("had issues closing zk conn");
+			}
 	}
 	
 	/**
@@ -218,10 +340,7 @@ public class YarnClient {
 		env.put(Constants.ENV_JAR_PATH,pathToHDFSJar);
 		env.put(Constants.ENV_JAR, jarName);
 		env.put(Constants.ENV_NAME,appId.toString());
-		//TODO:hardcodes bad
 		env.put(Constants.ENV_ZK_URI,this.zkURI);
-//		env.put(Constants.ENV_ZK_URI, "localhost:2181");
-//		env.put(Constants.ENV_HDFS_URI,"hdfs://localhost:8020");
 		amContainer.setEnvironment(env);
 
 		// Construct the command to be executed on the launched container

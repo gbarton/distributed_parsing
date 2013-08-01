@@ -1,5 +1,8 @@
 package com.gman.util;
 
+import java.util.Set;
+import java.util.TreeSet;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.yarn.api.records.Priority;
@@ -49,7 +52,8 @@ public class YarnUtils {
 	
 	public static void dumpEnvs() {
 		LOG.info("currently known enviroment variables");
-		for(String key :System.getenv().keySet())
+		Set<String> keys = new TreeSet<String>(System.getenv().keySet()); 
+		for(String key : keys)
 			LOG.info(key + ": " + System.getenv(key));
 	}
 	

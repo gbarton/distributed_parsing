@@ -7,17 +7,25 @@ public class Constants {
 	public static final String ENV_APPID = "needle_app_id";
 	public static final String ENV_JAR = "needle_env_jar";
 	public static final String ENV_JAR_PATH = "needle_env_jar_path";
-	public static final String ENV_CLASSPATH = "dp_class_path";
+	public static final String ENV_CLASSPATH = "needle_class_path";
 
 	//unique name that we can use for various pathing
-	public static final String ENV_NAME = "dp_name";
-	public static final String ENV_ZK_URI = "dp_zk_uri";
-	public static final String ENV_HDFS_URI = "dp_hdfs_uri";
+	public static final String ENV_NAME = "needle_app_name";
+	public static final String ZK_URI_BASE_PATH = "needle";
+	//path is used as a way to store key/value props for the client to use. such as broker location
+	public static final String ZK_CLIENT_BASE_PATH = "/clientProps";
+	public static final String CLIENT_BROKER_LOCATION = "broker";
+	
+	public static final String ENV_ZK_URI = "needle_zk_uri";
+	public static final String ENV_HDFS_URI = "needle_hdfs_uri";
 	
 	//discover service constants
-	public static final String BROKER_URI = "broker_uri";
-	public static final String BROKER_ZK_URI = "broker_zk_uri";
-	public static final String TOPIC_DISCOVERY = "disc_topic";
+	public static final String BROKER_URI = "needle_broker_uri";
+	public static final String BROKER_ZK_URI = "needle_broker_zk_uri";
+	
+	//Topics for communications
+	public static final String TOPIC_CLIENT_FEED = "needle_client_topic";
+	public static final String TOPIC_DISCOVERY = "needle_disc_topic";
 	public static final String TOPIC_CONTROL_UP = "control_up";
 	public static final String TOPIC_CONTROL_DOWN = "control_down";
 	public static final String TOPIC_WORKUNIT_DOWN = "workunit_down";

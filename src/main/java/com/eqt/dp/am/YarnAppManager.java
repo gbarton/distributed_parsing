@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import kafka.producer.KeyedMessage;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -82,7 +84,6 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 	
 	private float progress = 0.0f;
 	
-	
 	public YarnAppManager() throws IOException {
 		super();
 		LOG.info("*******************");
@@ -137,6 +138,17 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 			envs.put(Constants.BROKER_URI, broker.getURI());
 			LOG.info("broker online at: " + broker.getURI());
 			this.brokerUri = broker.getURI();
+			try {
+				zk.create(Constants.ZK_CLIENT_BASE_PATH + "/" + Constants.CLIENT_BROKER_LOCATION, this.brokerUri.getBytes(),Ids.OPEN_ACL_UNSAFE,CreateMode.PERSISTENT);
+			} catch (KeeperException e) {
+				LOG.error("issues writing broker out to ZK",e);
+				throw new IOException("issues writing broker out to ZK",e);
+			} catch (InterruptedException e) {
+				LOG.error("issues writing broker out to ZK",e);
+				throw new IOException("issues writing broker out to ZK",e);
+			}
+		} else { //using external kafka
+			this.brokerUri = envs.get(Constants.BROKER_URI);
 		}
 		
 		//init basic topics and a producer
@@ -161,7 +173,7 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 	@Override
 	public void process(WatchedEvent event) {
 		//TODO: when we go to multiple brokers this has to create more than 1 dir
-    	String path = "/" + envs.get(Constants.ENV_NAME);
+    	String path = "/kafka"; // + envs.get(Constants.ENV_NAME);
     	LOG.info("zookeeper connection complete, creating path: " + path);
     	try {
 			zk.create(path,null,Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
@@ -173,16 +185,31 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 			LOG.error("total fail with zk", e);
 			System.exit(1);
 		} finally {
-			try {
-				zk.close();
-			} catch (InterruptedException e) {
-				//gulp
-			}
+			//we need this thing still
+//			try {
+//				zk.close();
+//			} catch (InterruptedException e) {
+//				//gulp
+//			}
 		}
     	//go ahead and add to the constants where to bind the brokers to
     	envs.put(Constants.BROKER_ZK_URI, envs.get(Constants.ENV_ZK_URI)+path);
+    	LOG.info("Kafka zk set to: " + envs.get(Constants.BROKER_ZK_URI));
     	init.set(true);
 	}
+	
+	/**
+	 * sends a message to the client.
+	 * @param update
+	 */
+	protected void updateClient(String update) {
+		updateClient(update,"NO_MESSAGE");
+	}
+
+	protected void updateClient(String update, String message) {
+		prod.send(new KeyedMessage<String, String>(Constants.TOPIC_CLIENT_FEED, update,message));
+	}
+
 	
 	/**
 	 * Use this for consumers

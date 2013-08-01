@@ -1,7 +1,5 @@
 package com.eqt.needle.task;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
@@ -17,8 +15,6 @@ import com.eqt.needle.notification.StatusReporter;
  */
 public class YarnTask extends BasicYarnService {
 	private static final Log LOG = LogFactory.getLog(YarnTask.class);
-	private AtomicBoolean init = new AtomicBoolean(false);
-	
 
 	public YarnTask(String serviceName) {
 		super();
