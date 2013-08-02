@@ -26,26 +26,13 @@ public class StatusReporter extends TopicConsumer {
 	 * @param isAM
 	 */
 	public StatusReporter(Producer<String,String> prod, String brokerUri,STATUS initialStatus, boolean isAM) {
-		super(isAM?TOPIC_TO_TASKS:TOPIC_TO_AM,brokerUri);
+		super(isAM?TOPIC_TO_AM:TOPIC_TO_TASKS,brokerUri);
 		this.isAM = isAM;
 	}
 	
 	public void sendMessage(Producer<String, String> prod, STATUS key, String value) {
 		prod.send(new KeyedMessage<String, String>(this.isAM?TOPIC_TO_TASKS:TOPIC_TO_AM,key.toString(),value));
 	}
-	
-	/**
-	 * Used to seed the topic with data, since the consumer will gladly blow up trying to attach.
-	 * Only has to be called once.
-	 * @param prod
-	 * @param isAM -is this the AM or not?
-	 * @param key
-	 * @param value
-	 */
-	public static void sendMessage(Producer<String, String> prod,boolean isAM) {
-		prod.send(new KeyedMessage<String, String>(isAM?TOPIC_TO_TASKS:TOPIC_TO_AM,STATUS.PENDING.toString(),"init"));
-	}
-	
 	
 	public Message<STATUS,String> getNextMessage() {
 		Message<String,String> stringMessage = getNextStringMessage();

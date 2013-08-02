@@ -81,6 +81,7 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 	// cluster stats
 	private Resource min;
 	private Resource max;
+	private int clusterNodes = 1; //yea made big assumption here
 	
 	private float progress = 0.0f;
 	
@@ -121,7 +122,7 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 		// Connect to the Scheduler of the ResourceManager.
 		InetSocketAddress rmAddress = NetUtils.createSocketAddr(conf.get(YarnConfiguration.RM_SCHEDULER_ADDRESS,
 				YarnConfiguration.DEFAULT_RM_SCHEDULER_ADDRESS));
-		System.out.println("Connecting to ResourceManager at " + rmAddress);
+		LOG.info("Connecting to ResourceManager at " + rmAddress);
 		resourceManager = (AMRMProtocol) rpc.getProxy(AMRMProtocol.class, rmAddress, conf);
 
 		RegisterApplicationMasterRequest appMasterRequest = Records.newRecord(RegisterApplicationMasterRequest.class);
@@ -161,13 +162,20 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 		min = response.getMinimumResourceCapability();
 		max = response.getMaximumResourceCapability();
 		LOG.info("registered");
-		
 	}
 
 	protected void incProgress(float by) {
 		progress+= by;
 		if(progress > 1.0f)
 			progress = 1.0f;
+		
+		//TODO: hacky?? how else does one send progress updates/heartbeats to rm?
+		try {
+			releaseContainers(null);
+		} catch (YarnRemoteException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 	
 	@Override
@@ -210,6 +218,15 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 		prod.send(new KeyedMessage<String, String>(Constants.TOPIC_CLIENT_FEED, update,message));
 	}
 
+	/**
+	 * Will be inaccurate until a request for resources via newContainer has
+	 * been called.
+	 * @return
+	 */
+	protected int getClusterNodes() {
+		return clusterNodes;
+	}
+	
 	
 	/**
 	 * Use this for consumers
@@ -263,7 +280,7 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 		req.addAllAsks(requestedContainers);
 
 		//request ID AND number of attempts all in 1! so nice.
-		int rmRequestID = 0;
+		int rmRequestID = 1;
 
 		// Set ApplicationAttemptId
 		req.setApplicationAttemptId(appAttemptID);
@@ -271,30 +288,39 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 		List<ContainerId> releasedContainers = new ArrayList<ContainerId>();
 		req.addAllReleases(releasedContainers);
 		req.setProgress(progress);
+		
 		AllocateResponse allocateResponse;
 
 		// loop until we get a container to startup in.
 		// TODO: need a little util to go fetch containers
 		int numCon = 0;
-		while (numCon < numContainers && rmRequestID < maxRequestAttempts) {
-			LOG.info("resource try #" + rmRequestID);
+		while (numCon < numContainers && rmRequestID <= maxRequestAttempts) {
 			req.setResponseId(rmRequestID);
 			allocateResponse = resourceManager.allocate(req);
-			LOG.info("allocate response sent: " + req.getResponseId());
+			//TODO: maybe a better way to ask this ahead of time?
+			this.clusterNodes = allocateResponse.getNumClusterNodes();
+			LOG.info("resource try #" + rmRequestID + " allocate responseID sent: " + req.getResponseId());
 
+			//we need to give the RM a chance to actually put a container together.
+			//TODO: theres gotta be a better way!!
+			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				//gulp
+				LOG.warn("troubles sleeping again");
+			}
+			
 			// Get AMResponse from AllocateResponse
 			AMResponse amResp = allocateResponse.getAMResponse();
-			LOG.info("response received: " + amResp.getResponseId());
 
 			// Retrieve list of allocated containers from the response
 			List<Container> givenContainers = amResp.getAllocatedContainers();
-			LOG.info("containers given to AM: " + givenContainers.size());
+			LOG.info("responseID received: " + amResp.getResponseId() + " containers given to AM: " + givenContainers.size());
 			if( givenContainers.size() > 0) {
 				allocatedContainers.addAll(givenContainers);
 				numCon = numCon + givenContainers.size();
 			}
 			rmRequestID++;
-			//TODO: sleep a little to not spam RM??
 		}
 		return allocatedContainers;
 	}
@@ -342,7 +368,7 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 
 		// Set the environment, will pull along anything setup from the client as well as new broker stuffs.
 		Map<String, String> env = new HashMap<String, String>();
-		Constants.fill(System.getenv(), env);
+		Constants.fill(this.envs, env);
 		// i think this shoulda been done FOR me
 		env.put(ApplicationConstants.AM_CONTAINER_ID_ENV, ConverterUtils.toString(container.getId()));
 		env.put(ApplicationConstants.NM_HOST_ENV, container.getNodeId().getHost());

@@ -14,7 +14,7 @@ import com.eqt.needle.notification.StatusReporter;
  * queue for reading/writing from.
  */
 public class YarnTask extends BasicYarnService {
-	private static final Log LOG = LogFactory.getLog(YarnTask.class);
+	protected static final Log LOG = LogFactory.getLog(YarnTask.class);
 
 	public YarnTask(String serviceName) {
 		super();

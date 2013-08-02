@@ -280,6 +280,7 @@ public class YarnClient implements Watcher {
 
 		if (br != null)
 			br.close();
+		System.exit(0);
 		
 	}
 	

@@ -29,23 +29,26 @@ public class StatMonitorSampleAM extends YarnAppManager {
 		//run forever
 		while(true) {
 			try {
-				List<Container> newContainers = newContainers(1, 512, 10);
-				List<ContainerId> releaseContainers = new ArrayList<ContainerId>();
-				if(newContainers.size() > 0) {
-					for(Container c : newContainers) {
-						LOG.info("found new container: " + c.toString());
-						//new host, lets add it.
-						if(!hosts.contains((c.getNodeHttpAddress()))) {
-							LOG.info("launching: " + c.toString());
-							hosts.add(c.getNodeHttpAddress());
-							launchContainer(c, "com.eqt.needle.sample.StatMonitorSampleTask", 512, null);
-							LOG.info("launched: " + c.toString());
-						} else 
-							releaseContainers.add(c.getId());
+				if(hosts.size() <= getClusterNodes()) {
+					List<Container> newContainers = newContainers(1, 512, 1);
+					List<ContainerId> releaseContainers = new ArrayList<ContainerId>();
+					if(newContainers.size() > 0) {
+						for(Container c : newContainers) {
+							LOG.info("found new container: " + c.toString());
+							//new host, lets add it.
+							if(!hosts.contains((c.getNodeHttpAddress()))) {
+								LOG.info("launching: " + c.toString());
+								hosts.add(c.getNodeHttpAddress());
+								launchContainer(c, "com.eqt.needle.sample.StatMonitorSampleTask", 512, null);
+								LOG.info("launched: " + c.toString());
+							} else 
+								releaseContainers.add(c.getId());
+						}
+						//send back the ones we didnt want.
+						releaseContainers(releaseContainers);
 					}
-					//send back the ones we didnt want.
-					releaseContainers(releaseContainers);
 				}
+				
 				
 				Message<STATUS,String> message = statusReporter.getNextMessage();
 				while(message != null) {
@@ -53,6 +56,10 @@ public class StatMonitorSampleAM extends YarnAppManager {
 					updateClient(message.key.toString(), message.value);
 					message = statusReporter.getNextMessage();
 				}
+				
+				//not really making progress since we want to run forever, this is just for heartbeating.
+				incProgress(0.0f);
+				
 				Thread.sleep(1000);
 			} catch (IOException e) {
 				// TODO Auto-generated catch block

@@ -150,7 +150,7 @@ public class NeedleConsumer implements Runnable {
 				}
 				readOffset = messageAndOffset.nextOffset();
 				try {
-					LOG.debug("##################### received a message! on topic: " + topic + " partition " + partition);
+					LOG.info("##################### received a message! on topic: " + topic + " partition " + partition);
 					messages.put(new Message<String, String>(
 							convertBytesToString(messageAndOffset.message().key()),
 							convertBytesToString(messageAndOffset.message().payload())));

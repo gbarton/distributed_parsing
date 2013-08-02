@@ -30,14 +30,13 @@ public class StatMonitorSampleTask extends YarnTask {
 		ObjectMapper mapper = new ObjectMapper();
 		while(true) {
 			double cpu = osMBean.getSystemLoadAverage();
-			System.out.println("Cpu usage: "+cpu+"%");
 			Payload p = new Payload();
 			p.cores = osMBean.getAvailableProcessors();
 			p.loadAverage = osMBean.getSystemLoadAverage();
-			p.happenedAt = System.currentTimeMillis() / (10*1000); //nearest 10 seconds
-			
+			p.happenedAt = System.currentTimeMillis() % (10*1000); //nearest 10 seconds
+			LOG.info("Status Report: " + mapper.writeValueAsString(p));
 			statusReporter.sendMessage(prod, status, mapper.writeValueAsString(p));
-			Thread.sleep(1000*60);
+			Thread.sleep(1000*5);
 		}
 	}
 
