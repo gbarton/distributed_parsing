@@ -20,6 +20,8 @@ import org.codehaus.jackson.JsonParseException;
 import org.codehaus.jackson.map.JsonMappingException;
 import org.codehaus.jackson.map.ObjectMapper;
 
+import com.eqt.needle.notification.Control;
+import com.eqt.needle.notification.KMesg;
 import com.gman.notification.EventProcessor.WorkUnit;
 import com.gman.util.Constants;
 
@@ -50,7 +52,7 @@ public class KafkaProcessor extends BaseProcessor {
 //	private final ConsumerConnector consumer;
 	private final Producer<String, String> producer;
 	private ArrayBlockingQueue<WorkUnit> workUnits = new ArrayBlockingQueue<EventProcessor.WorkUnit>(10);
-	private ArrayBlockingQueue<Control> controlCommands = new ArrayBlockingQueue<EventProcessor.Control>(10);
+	private ArrayBlockingQueue<Control> controlCommands = new ArrayBlockingQueue<Control>(10);
 	//setting up consumers
 	private ExecutorService executor = null;
 	

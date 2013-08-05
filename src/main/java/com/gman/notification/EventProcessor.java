@@ -7,6 +7,9 @@ import org.codehaus.jackson.JsonParseException;
 import org.codehaus.jackson.map.JsonMappingException;
 import org.codehaus.jackson.map.ObjectMapper;
 
+import com.eqt.needle.notification.Control;
+import com.eqt.needle.notification.KMesg;
+
 /**
  * Base Class for notifications traveling through the system.
  * @author gman
@@ -33,15 +36,6 @@ public interface EventProcessor {
 	public void createdNewWork(WorkUnit from, String path);
 	
 	public WorkUnit getNextWorkUnit();
-	
-	/**
-	 * little interface to build to if you are going to send messages
-	 * over Kafka
-	 */
-	public interface KMesg<T> {
-		public String pack();
-		public T unpack(String packed);
-	}
 	
 	public static class WorkUnit implements KMesg<WorkUnit> {
 		@Override
@@ -138,25 +132,6 @@ public interface EventProcessor {
 			this.pathIn = new String(cloneMe.pathIn);
 			this.pathOut = new String(cloneMe.pathOut);
 			this.work = new String(cloneMe.work);
-		}
-	}
-	
-	public static enum Control implements KMesg<Control> {
-		START,
-		STOP,
-		RETRY,
-		PAUSE,
-		FAILED,
-		FINISHED;
-
-		@Override
-		public String pack() {
-			return this.toString();
-		}
-
-		@Override
-		public Control unpack(String packed) {
-			return Control.valueOf(packed);
 		}
 	}
 }

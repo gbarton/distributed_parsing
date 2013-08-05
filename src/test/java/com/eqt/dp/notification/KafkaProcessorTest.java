@@ -6,9 +6,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.eqt.needle.notification.Control;
 import com.gman.broker.EmbeddedZK;
 import com.gman.broker.StandaloneBroker;
-import com.gman.notification.EventProcessor.Control;
 import com.gman.notification.KafkaProcessor;
 import com.gman.notification.EventProcessor.WorkUnit;
 

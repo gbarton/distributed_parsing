@@ -301,6 +301,8 @@ public class YarnClient implements Watcher {
 			} catch (InterruptedException e) {
 				LOG.warn("had issues closing zk conn");
 			}
+		
+		
 	}
 	
 	/**

@@ -29,11 +29,10 @@ public class StatMonitorSampleTask extends YarnTask {
 		statusReporter.sendMessage(prod, status, "");
 		ObjectMapper mapper = new ObjectMapper();
 		while(true) {
-			double cpu = osMBean.getSystemLoadAverage();
 			Payload p = new Payload();
 			p.cores = osMBean.getAvailableProcessors();
 			p.loadAverage = osMBean.getSystemLoadAverage();
-			p.happenedAt = System.currentTimeMillis() % (10*1000); //nearest 10 seconds
+			p.happenedAt = (System.currentTimeMillis()/(10000))*10000; //nearest 10 seconds, relying on java rounding
 			LOG.info("Status Report: " + mapper.writeValueAsString(p));
 			statusReporter.sendMessage(prod, status, mapper.writeValueAsString(p));
 			Thread.sleep(1000*5);

@@ -15,7 +15,6 @@ import com.gman.broker.EmbeddedZK;
 import com.gman.broker.StandaloneBroker;
 import com.gman.notification.ClientControl;
 import com.gman.notification.ServerControl;
-import com.gman.notification.EventProcessor.Control;
 import com.gman.notification.EventProcessor.WorkUnit;
 
 public class ConsumerTest {
