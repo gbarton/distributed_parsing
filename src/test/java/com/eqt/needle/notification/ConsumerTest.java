@@ -11,14 +11,14 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.gman.broker.EmbeddedZK;
-import com.gman.broker.StandaloneBroker;
+import com.eqt.needle.broker.EmbeddedZK;
+import com.eqt.needle.broker.StandaloneBroker;
 import com.gman.notification.ClientControl;
 import com.gman.notification.ServerControl;
 import com.gman.notification.EventProcessor.WorkUnit;
 
 public class ConsumerTest {
-	private final EmbeddedZK zk = new EmbeddedZK();
+	EmbeddedZK zk = null;
 	StandaloneBroker broker = null;
 	WorkUnit u = new WorkUnit("/pathIn","/pathOut");
 	Control c = Control.START;
@@ -27,6 +27,7 @@ public class ConsumerTest {
 
 	@Before
 	public void setUp() throws Exception {
+		zk = new EmbeddedZK();
 		Thread tz = new Thread(zk,"zk");
 		tz.start();
 		broker = new StandaloneBroker(zk.getURI());

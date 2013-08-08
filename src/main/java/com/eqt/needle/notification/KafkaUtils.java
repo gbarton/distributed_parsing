@@ -17,7 +17,7 @@ public class KafkaUtils {
 		Properties pprops = new Properties();
 		pprops.put("metadata.broker.list", brokerURI);
 		pprops.put("serializer.class", "kafka.serializer.StringEncoder");
-		pprops.put("partitioner.class", "com.gman.broker.SimplePartitioner");
+		pprops.put("partitioner.class", "com.eqt.needle.broker.SimplePartitioner");
 		pprops.put("request.required.acks", "1");
 		pprops.put("producer.type", "sync");
 		ProducerConfig config = new ProducerConfig(pprops);

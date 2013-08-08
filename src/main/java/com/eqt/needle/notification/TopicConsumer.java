@@ -16,8 +16,6 @@ import org.apache.commons.logging.LogFactory;
 import kafka.javaapi.TopicMetadata;
 import kafka.javaapi.TopicMetadataRequest;
 import kafka.javaapi.consumer.SimpleConsumer;
-import kafka.javaapi.producer.Producer;
-import kafka.producer.KeyedMessage;
 
 /**
  * Wrapper class for listening to all partitions of a topic.
@@ -27,7 +25,7 @@ import kafka.producer.KeyedMessage;
  *
  */
 public class TopicConsumer {
-	private static final Log LOG = LogFactory.getLog(TopicConsumer.class);
+	protected static final Log LOG = LogFactory.getLog(TopicConsumer.class);
 	private String topic;
 	private List<String> seedBrokers;
 	private Set<HostPort> brokers;

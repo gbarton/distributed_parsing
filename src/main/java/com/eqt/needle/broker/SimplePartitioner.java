@@ -1,4 +1,4 @@
-package com.gman.broker;
+package com.eqt.needle.broker;
 
 import kafka.producer.Partitioner;
 import kafka.utils.VerifiableProperties;

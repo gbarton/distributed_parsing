@@ -18,6 +18,7 @@ import kafka.producer.KeyedMessage;
 public class DiscoveryService extends TopicConsumer {
 	private static final Log LOG = LogFactory.getLog(DiscoveryService.class);
 	private static final String TOPIC = "discovery_topic";
+	private String serviceId = null;
 	
 	Map<String, Map<String,String>> services = new HashMap<String, Map<String,String>>();
 	
@@ -28,6 +29,7 @@ public class DiscoveryService extends TopicConsumer {
 	 */
 	public DiscoveryService(Producer<String,String> prod, String serviceId, String brokerUri) {
 		super(TOPIC,brokerUri);
+		this.serviceId = serviceId;
 		String keyValue = "created:" + System.currentTimeMillis();
 		prod.send(new KeyedMessage<String, String>(TOPIC, serviceId, keyValue));
 		Thread t = new Thread(new Runnable() {
@@ -57,9 +59,13 @@ public class DiscoveryService extends TopicConsumer {
 		t.start();
 	}
 	
-	public void sendInfo(Producer<String,String> prod, String service, String key, String value) {
+	public void sendInfo(Producer<String,String> prod, SERVICE key, String value) {
+		sendInfo(prod,key.toString(),value);
+	}
+	
+	public void sendInfo(Producer<String,String> prod, String key, String value) {
 		String keyVal = key + ":" + value;
-		prod.send(new KeyedMessage<String, String>(TOPIC, service, keyVal));
+		prod.send(new KeyedMessage<String, String>(TOPIC, serviceId, keyVal));
 	}
 	
 	public Set<String> getServices() {
@@ -78,7 +84,6 @@ public class DiscoveryService extends TopicConsumer {
 		return null;
 	}
 	
-	
 	/**
 	 * few basic property values.
 	 * @author gman
@@ -86,8 +91,8 @@ public class DiscoveryService extends TopicConsumer {
 	public static enum SERVICE {
 		HOST,	//what host the service is running on
 		PORT,	//if theres a port associated with the service
-		UNIQUE_TOPIC //if there is a topic that this service is listening on specifically.
-		
+		UNIQUE_TOPIC, //if there is a topic that this service is listening on specifically.
+		CONTROL_TOPIC  //each tasks starts up with a known topic for controlling.
 	}
 	
 }

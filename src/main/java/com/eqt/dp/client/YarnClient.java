@@ -1,6 +1,7 @@
 package com.eqt.dp.client;
 
 import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
@@ -9,6 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import kafka.javaapi.producer.Producer;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -45,8 +48,11 @@ import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.data.Stat;
 
+import com.eqt.needle.notification.KafkaUtils;
 import com.eqt.needle.notification.Message;
 import com.eqt.needle.notification.TopicConsumer;
+import com.eqt.needle.topics.control.KillCommand;
+import com.eqt.needle.topics.control.KillCommand.WHOAMI;
 import com.gman.util.Constants;
 import com.gman.util.YarnUtils;
 
@@ -55,7 +61,7 @@ import com.gman.util.YarnUtils;
  * Must call constructor and then populate all the important marked vars
  * @author gman
  */
-public class YarnClient implements Watcher {
+public class YarnClient implements Watcher, Closeable {
 	private static final Log LOG = LogFactory.getLog(YarnClient.class);
 	private AtomicInteger init = new AtomicInteger(0);
 	
@@ -88,6 +94,8 @@ public class YarnClient implements Watcher {
 	protected String brokerUri = null;
 	
 	protected TopicConsumer clientFeed = null;
+	protected Producer<String, String> prod = null;
+	protected KillCommand killCommand = null;
 	
 	public YarnClient(String zkURI) throws IOException {
 		
@@ -239,8 +247,12 @@ public class YarnClient implements Watcher {
 				LOG.error("zk connection lost.");
 				throw new IOException("zk flaked on us",e);
 			}
+		
+		//bring up comms
 		LOG.info("broker receieved: " + brokerUri);
 		clientFeed = new TopicConsumer(Constants.TOPIC_CLIENT_FEED, this.brokerUri);
+		prod = KafkaUtils.getProducer(this.brokerUri);
+		killCommand = new KillCommand(WHOAMI.CLIENT, this.brokerUri, prod, null);
 
 		long start = System.currentTimeMillis();
 		LOG.info("going into spin cycle:");
@@ -280,12 +292,13 @@ public class YarnClient implements Watcher {
 
 		if (br != null)
 			br.close();
+		
 		System.exit(0);
 		
 	}
 	
 	public void close() throws IOException {
-		LOG.info("killing");
+		LOG.info("killing Client");
 
 		// kill it
 		KillApplicationRequest killRequest = Records.newRecord(KillApplicationRequest.class);
@@ -301,8 +314,10 @@ public class YarnClient implements Watcher {
 			} catch (InterruptedException e) {
 				LOG.warn("had issues closing zk conn");
 			}
-		
-		
+//		
+//		controlSignal.sendControl(prod, Control.STOP);
+//		controlSignal.close();
+		clientFeed.close();
 	}
 	
 	/**

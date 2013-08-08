@@ -8,8 +8,6 @@ import java.util.Properties;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
@@ -22,7 +20,6 @@ import org.codehaus.jackson.map.ObjectMapper;
 
 import com.eqt.needle.notification.Control;
 import com.eqt.needle.notification.KMesg;
-import com.gman.notification.EventProcessor.WorkUnit;
 import com.gman.util.Constants;
 
 import kafka.consumer.Consumer;
@@ -87,7 +84,7 @@ public class KafkaProcessor extends BaseProcessor {
 		Properties pprops = new Properties();
 		pprops.put("metadata.broker.list", brokerURI);
 		pprops.put("serializer.class", "kafka.serializer.StringEncoder");
-		pprops.put("partitioner.class", "com.gman.broker.SimplePartitioner");
+		pprops.put("partitioner.class", "com.eqt.needle.broker.SimplePartitioner");
 		pprops.put("request.required.acks", "1");
 		pprops.put("producer.type", "sync");
 		ProducerConfig config = new ProducerConfig(pprops);
@@ -186,6 +183,7 @@ public class KafkaProcessor extends BaseProcessor {
 	 * @param topics
 	 * @return
 	 */
+	@SuppressWarnings("unused")
 	private Map<String, Integer> topicMap(String... topics) {
 		Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
 		Integer i = new Integer(1);

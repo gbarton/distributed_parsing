@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import kafka.producer.KeyedMessage;
@@ -48,10 +50,14 @@ import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.ZooDefs.Ids;
 
 import com.eqt.needle.BasicYarnService;
+import com.eqt.needle.broker.StandaloneBroker;
+import com.eqt.needle.notification.Control;
 import com.eqt.needle.notification.DiscoveryService;
 import com.eqt.needle.notification.KafkaUtils;
+import com.eqt.needle.notification.Message;
 import com.eqt.needle.notification.StatusReporter;
-import com.gman.broker.StandaloneBroker;
+import com.eqt.needle.topics.control.AMControlTopic;
+import com.eqt.needle.topics.control.AMTaskControlTopic;
 import com.gman.util.Constants;
 import com.gman.util.YarnUtils;
 
@@ -74,10 +80,6 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 	//fs, cause its good to have one.
 	protected FileSystem fs;
 	
-	//info about where we are running
-	private String host;
-//	private int port;
-	
 	// cluster stats
 	private Resource min;
 	private Resource max;
@@ -85,8 +87,14 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 	
 	private float progress = 0.0f;
 	
+	protected AMControlTopic controlSignal = null;
+	protected AMTaskControlTopic controlTaskSignal = null;
+	
+	//the containers currently being run by this am.
+	private Set<ContainerId> knownContainers = new HashSet<ContainerId>();
+	
 	public YarnAppManager() throws IOException {
-		super();
+		super("APPMANAGER");
 		LOG.info("*******************");
 		LOG.info("YarnAppManager comming up");
 		LOG.info("*******************");
@@ -102,10 +110,6 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 
 		containerId = ConverterUtils.toContainerId(containerIdString);
 		appAttemptID = containerId.getApplicationAttemptId();
-
-		host = envs.get(ApplicationConstants.NM_HOST_ENV);
-//		ApplicationConstants.NM_HTTP_PORT_ENV
-//		port = NetUtils.getFreeSocketPort();
 		
 		LOG.info("connecting to zookeeper: " + envs.get(Constants.ENV_ZK_URI));
 		zk = new ZooKeeper(envs.get(Constants.ENV_ZK_URI),3000,this);
@@ -156,6 +160,8 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 		prod = KafkaUtils.getProducer(this.brokerUri);
 		statusReporter = new StatusReporter(prod,this.brokerUri,status,true);
 		discoveryService = new DiscoveryService(prod, "AM", this.brokerUri);
+		controlSignal = new AMControlTopic(this.brokerUri);
+		controlTaskSignal = new AMTaskControlTopic(this.brokerUri);
 		
 		LOG.info("registring");
 		RegisterApplicationMasterResponse response = resourceManager.registerApplicationMaster(appMasterRequest);
@@ -218,6 +224,39 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 		prod.send(new KeyedMessage<String, String>(Constants.TOPIC_CLIENT_FEED, update,message));
 	}
 
+	public void close() {
+		//first broadcast shut down to the tasks
+//		controlTaskSignal.sendControl(prod, Control.STOP, "now");
+		
+//		//listen for acks on the AMTaskControlTopic
+//		while(knownContainers.size() > 0) {
+//			Message<String,String> message = controlTaskSignal.getNextStringMessage();
+//			if(message != null) {
+//				
+//			}
+//		}
+		
+//		for(ContainerId c : knownContainers) {
+//			//send a message to them individually
+//			
+//			
+//		}
+		
+		
+		try {
+			releaseContainers(new ArrayList<ContainerId>(knownContainers));
+		} catch (YarnRemoteException e) {
+			LOG.warn("difficulties releasing containers",e);
+		}
+		
+		super.close();
+		if(controlSignal != null)
+			controlSignal.close();
+
+		if(this.broker != null)
+			this.broker.shutDown();
+	}
+	
 	/**
 	 * Will be inaccurate until a request for resources via newContainer has
 	 * been called.
@@ -250,6 +289,9 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 	 * @throws YarnRemoteException 
 	 */
 	public void releaseContainers(List<ContainerId> containers) throws YarnRemoteException {
+		//keep known containers up to date
+		knownContainers.removeAll(containers);
+
 		AllocateRequest req = Records.newRecord(AllocateRequest.class);
 		req.setApplicationAttemptId(appAttemptID);
 		req.addAllReleases(containers);
@@ -322,6 +364,10 @@ public class YarnAppManager extends BasicYarnService implements Watcher {
 			}
 			rmRequestID++;
 		}
+		
+		//keep known containers up to date
+		for(Container c : allocatedContainers) 
+			knownContainers.add(c.getId());
 		return allocatedContainers;
 	}
 	

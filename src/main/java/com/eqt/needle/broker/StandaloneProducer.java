@@ -1,4 +1,4 @@
-package com.gman.broker;
+package com.eqt.needle.broker;
 
 import java.util.Properties;
 
@@ -19,7 +19,7 @@ public class StandaloneProducer {
 		Properties props = new Properties();
 		props.put("metadata.broker.list", "gman-minty:9092");
 		props.put("serializer.class", "kafka.serializer.StringEncoder");
-		props.put("partitioner.class", "com.gman.broker.SimplePartitioner");
+		props.put("partitioner.class", "com.eqt.needle.broker.SimplePartitioner");
 		props.put("request.required.acks", "1");
 		ProducerConfig config = new ProducerConfig(props);
 		
